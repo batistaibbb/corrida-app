@@ -1,6 +1,17 @@
 # RunBrasil - Plataforma de Inscrições para Corridas de Rua
 
+[![Deploy to Vercel](https://vercel.com/button)](https://vercel.com/new)
+
 Plataforma completa e funcional para inscrição em eventos esportivos, utilizando **Mercado Pago** para pagamentos (PIX e Cartão).
+
+## 🏗️ Stack Tecnológica
+
+- **Frontend:** React 18 + TypeScript + Vite + Tailwind CSS
+- **Backend:** Supabase (PostgreSQL + Auth + Storage + Edge Functions)
+- **Pagamentos:** Mercado Pago (PIX + Cartão)
+- **Deploy:** Vercel (frontend) + Supabase (backend)
+- **CI/CD:** GitHub Actions
+- **Versionamento:** GitHub
 
 ## 🚀 Funcionalidades Implementadas
 
@@ -201,3 +212,50 @@ Para dúvidas ou suporte:
 
 **Integração de Pagamento:** Mercado Pago (PIX + Cartão)
 **Custo:** Apenas taxa por transação (sem mensalidade)
+
+---
+
+## 🚀 Deploy Rápido
+
+### 1. Configurar Supabase
+- Crie um projeto em [supabase.com](https://supabase.com)
+- Execute o SQL em `supabase/migrations/001_initial_schema.sql`
+- Crie um bucket `event-images` no Storage
+- Copie as credenciais (URL + anon key)
+
+### 2. Configurar Mercado Pago
+- Crie uma aplicação em [mercadopago.com.br/developers](https://www.mercadopago.com.br/developers)
+- Copie Public Key e Access Token
+- Configure webhook apontando para sua Edge Function
+
+### 3. Deploy na Vercel
+- Conecte o repositório GitHub na Vercel
+- Adicione as variáveis de ambiente (veja `.env.example`)
+- Deploy automático a cada push!
+
+📖 **Guia completo:** Consulte [SETUP_GUIDE.md](./SETUP_GUIDE.md) para instruções detalhadas.
+
+---
+
+## 📁 Estrutura do Projeto
+
+```
+runbrasil/
+├── src/                    # Código frontend
+│   ├── App.tsx            # Componente principal
+│   ├── lib/
+│   │   └── supabase.ts    # Cliente Supabase
+│   ├── contexts/          # Context API (Auth, Data)
+│   ├── data/              # Dados mockados (fallback)
+│   └── types/             # Tipos TypeScript
+├── supabase/
+│   ├── migrations/        # Schema SQL do banco
+│   └── functions/         # Edge Functions
+│       ├── mercadopago-webhook/
+│       ├── create-pix-payment/
+│       └── create-card-payment/
+├── .github/workflows/     # CI/CD GitHub Actions
+├── .env.example           # Template de variáveis
+├── vercel.json            # Configuração Vercel
+└── SETUP_GUIDE.md         # Guia completo de setup
+```
