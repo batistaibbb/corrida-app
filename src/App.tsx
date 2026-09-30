@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider, useData } from './contexts/DataContext';
 import { useState, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
+import DiagnosticPage from './pages/DiagnosticPage';
+import './lib/test-supabase';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -1047,6 +1049,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
             <Route path="/minha-conta" element={<ProtectedRoute requiredRole="participant"><ParticipantDashboard /></ProtectedRoute>} />
+            <Route path="/diagnostico" element={<DiagnosticPage />} />
           </Routes>
         </DataProvider>
       </AuthProvider>
