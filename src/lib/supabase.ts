@@ -3,6 +3,13 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Debug logs
+console.log('🔍 Supabase Config:', {
+  url: supabaseUrl ? '✅ Configurado' : '❌ Não configurado',
+  key: supabaseAnonKey ? '✅ Configurado' : '❌ Não configurado',
+  urlValue: supabaseUrl,
+});
+
 // Create Supabase client only if credentials are available
 // Otherwise, the app will run in demo mode using localStorage
 export const supabase: SupabaseClient | null = 
@@ -18,6 +25,11 @@ export const supabase: SupabaseClient | null =
 
 // Check if running in demo mode (no Supabase configured)
 export const isDemoMode = !supabase;
+
+console.log('🔍 Supabase Status:', {
+  client: supabase ? '✅ Criado' : '❌ Não criado',
+  demoMode: isDemoMode ? '⚠️ MODO DEMO' : '✅ MODO PRODUÇÃO',
+});
 
 // Helper functions for common operations
 export const supabaseHelpers = {
