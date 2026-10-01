@@ -182,13 +182,15 @@ function LoginPage() {
     if (isLogin) {
       const result = await login(formData.email, formData.password);
       if (result.success) {
-        // Get user role from Supabase or localStorage
-        const currentUser = JSON.parse(localStorage.getItem('rb_session') || 'null');
-        if (currentUser) {
-          navigate(currentUser.role === 'admin' ? '/admin' : '/minha-conta');
-        } else {
-          navigate('/minha-conta');
-        }
+        // Wait a bit for user context to update, then redirect based on role
+        setTimeout(() => {
+          const currentUser = JSON.parse(localStorage.getItem('rb_session') || 'null');
+          if (currentUser && currentUser.role === 'admin') {
+            navigate('/admin');
+          } else {
+            navigate('/minha-conta');
+          }
+        }, 500);
       } else {
         setError(result.message);
       }
@@ -980,6 +982,12 @@ function ParticipantDashboard() {
             <span className="text-xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">RunBrasil</span>
           </Link>
           <div className="flex items-center gap-4">
+            {user.role === 'admin' && (
+              <Link to="/admin" className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-200">
+                <LayoutDashboard className="w-4 h-4" />
+                Painel Admin
+              </Link>
+            )}
             <Link to="/" className="text-sm text-gray-600 hover:text-orange-600">Ver Eventos</Link>
             <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"><LogOut className="w-4 h-4" />Sair</button>
           </div>
@@ -988,6 +996,21 @@ function ParticipantDashboard() {
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-8">Olá, {user.name.split(' ')[0]}! 👋</h1>
+
+        {user.role === 'admin' && (
+          <div className="bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl shadow-lg p-6 mb-8 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold mb-2">🎛️ Painel Administrativo</h2>
+                <p className="text-purple-100 text-sm">Acesse o painel para gerenciar eventos, inscrições e pagamentos</p>
+              </div>
+              <Link to="/admin" className="flex items-center gap-2 px-6 py-3 bg-white text-purple-700 font-semibold rounded-lg hover:bg-purple-50 transition-colors">
+                <LayoutDashboard className="w-5 h-5" />
+                Acessar Painel
+              </Link>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-xl shadow-sm overflow-hidden mb-8">
           <div className="p-6 border-b"><h2 className="text-lg font-bold">Minhas Inscrições</h2></div>
