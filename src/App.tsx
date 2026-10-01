@@ -4,7 +4,6 @@ import { DataProvider, useData } from './contexts/DataContext';
 import { useState, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
 import DiagnosticPage from './pages/DiagnosticPage';
-import './lib/test-supabase';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 

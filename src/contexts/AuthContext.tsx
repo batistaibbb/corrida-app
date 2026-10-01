@@ -40,30 +40,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const initAuth = async () => {
-      // If Supabase is configured, use Supabase Auth
-      if (!isDemoMode && supabase) {
-        // Check for existing session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await loadUserProfile(session.user.id);
-        }
+  const loadUserProfile = async (userId: string) => {
+    if (!supabase) return;
 
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error || !profile) {
+        console.error('Error loading profile:', error);
+        return;
+      }
+
+      setUser({
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        password: '',
+        role: profile.role,
+        cpf: profile.cpf || '',
+        phone: profile.phone || '',
+        createdAt: profile.created_at,
+      });
+    } catch (err) {
+      console.error('Error in loadUserProfile:', err);
+    }
+  };
+
+  useEffect(() => {
+    let subscription: any = null;
+
+    const initAuth = async () => {
+      if (!isDemoMode && supabase) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             await loadUserProfile(session.user.id);
-          } else {
-            setUser(null);
           }
-          setLoading(false);
-        });
 
+          const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (session?.user) {
+              await loadUserProfile(session.user.id);
+            } else {
+              setUser(null);
+            }
+            setLoading(false);
+          });
+
+          subscription = data.subscription;
+        } catch (err) {
+          console.error('Error initializing auth:', err);
+        }
         setLoading(false);
-        return () => subscription.unsubscribe();
       } else {
-        // Demo mode: use localStorage
         const storedUsers = localStorage.getItem('rb_users');
         if (!storedUsers) {
           localStorage.setItem('rb_users', JSON.stringify(SEED_USERS));
@@ -78,34 +110,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
+
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
-
-  const loadUserProfile = async (userId: string) => {
-    if (!supabase) return;
-
-    // Load profile from Supabase
-    const { data: profile, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-
-    if (error || !profile) {
-      console.error('Error loading profile:', error);
-      return;
-    }
-
-    setUser({
-      id: profile.id,
-      name: profile.name,
-      email: profile.email,
-      password: '', // Not needed with Supabase Auth
-      role: profile.role,
-      cpf: profile.cpf || '',
-      phone: profile.phone || '',
-      createdAt: profile.created_at,
-    });
-  };
 
   const getUsers = (): User[] => {
     const stored = localStorage.getItem('rb_users');
@@ -117,26 +128,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    // If Supabase is configured, use Supabase Auth
     if (!isDemoMode && supabase) {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-      if (error) {
-        return { success: false, message: error.message };
+        if (error) {
+          return { success: false, message: error.message };
+        }
+
+        if (data.user) {
+          await loadUserProfile(data.user.id);
+          return { success: true, message: 'Login realizado com sucesso!' };
+        }
+
+        return { success: false, message: 'Erro ao fazer login' };
+      } catch (err) {
+        console.error('Error in login:', err);
+        return { success: false, message: 'Erro ao fazer login' };
       }
-
-      if (data.user) {
-        await loadUserProfile(data.user.id);
-        return { success: true, message: 'Login realizado com sucesso!' };
-      }
-
-      return { success: false, message: 'Erro ao fazer login' };
     }
 
-    // Demo mode: use localStorage
     const users = getUsers();
     const found = users.find(u => u.email === email && u.password === password);
     
@@ -149,48 +163,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (data: Omit<User, 'id' | 'createdAt'>) => {
-    // If Supabase is configured, use Supabase Auth
     if (!isDemoMode && supabase) {
-      const { data: authData, error } = await supabase.auth.signUp({
-        email: data.email,
-        password: data.password,
-        options: {
-          data: {
-            name: data.name,
-            role: data.role,
+      try {
+        const { data: authData, error } = await supabase.auth.signUp({
+          email: data.email,
+          password: data.password,
+          options: {
+            data: {
+              name: data.name,
+              role: data.role,
+            },
           },
-        },
-      });
+        });
 
-      if (error) {
-        return { success: false, message: error.message };
-      }
-
-      if (authData.user) {
-        // Create profile in profiles table
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: authData.user.id,
-            email: data.email,
-            name: data.name,
-            role: data.role,
-            cpf: data.cpf,
-            phone: data.phone,
-          });
-
-        if (profileError) {
-          console.error('Error creating profile:', profileError);
+        if (error) {
+          return { success: false, message: error.message };
         }
 
-        await loadUserProfile(authData.user.id);
-        return { success: true, message: 'Conta criada com sucesso!' };
-      }
+        if (authData.user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: authData.user.id,
+              email: data.email,
+              name: data.name,
+              role: data.role,
+              cpf: data.cpf,
+              phone: data.phone,
+            });
 
-      return { success: false, message: 'Erro ao criar conta' };
+          if (profileError) {
+            console.error('Error creating profile:', profileError);
+          }
+
+          await loadUserProfile(authData.user.id);
+          return { success: true, message: 'Conta criada com sucesso!' };
+        }
+
+        return { success: false, message: 'Erro ao criar conta' };
+      } catch (err) {
+        console.error('Error in register:', err);
+        return { success: false, message: 'Erro ao criar conta' };
+      }
     }
 
-    // Demo mode: use localStorage
     const users = getUsers();
     const exists = users.find(u => u.email === data.email);
     
@@ -212,9 +228,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    // If Supabase is configured, use Supabase Auth
     if (!isDemoMode && supabase) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch (err) {
+        console.error('Error in logout:', err);
+      }
     }
 
     setUser(null);
@@ -222,7 +241,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Carregando...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
