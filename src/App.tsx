@@ -76,7 +76,19 @@ function Header() {
 function ProtectedRoute({ children, requiredRole }: { children: ReactNode; requiredRole?: 'admin' | 'participant' }) {
   const { user } = useAuth();
   if (!user) return <Link to="/login" className="block text-center py-20 text-orange-600">Faça login para continuar →</Link>;
-  if (requiredRole && user.role !== requiredRole) return <div className="text-center py-20">Acesso negado</div>;
+  // Admins can access any page, participants can only access participant pages
+  const userRole = user.role as string;
+  if (requiredRole && userRole !== requiredRole && userRole !== 'admin') {
+    return <div className="text-center py-20">
+      <p className="text-xl text-gray-700 mb-4">Acesso negado</p>
+      <p className="text-gray-500 mb-4">Você precisa de permissão para acessar esta página.</p>
+      {userRole === 'admin' ? (
+        <Link to="/admin" className="text-orange-600 hover:underline">Ir para Dashboard Admin →</Link>
+      ) : (
+        <Link to="/" className="text-orange-600 hover:underline">Voltar para a página inicial →</Link>
+      )}
+    </div>;
+  }
   return <>{children}</>;
 }
 
