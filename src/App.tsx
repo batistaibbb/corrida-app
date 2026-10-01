@@ -12,7 +12,7 @@ import {
   User, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft,
   LogOut, LayoutDashboard, CreditCard, FileText, CheckCircle,
   QrCode, Copy, Check, Shield, Download, Plus, Edit, Trash2,
-  DollarSign, AlertCircle, Phone, Home as HomeIcon
+  DollarSign, AlertCircle, Phone, Home as HomeIcon, Heart, Share2
 } from 'lucide-react';
 
 // ============ COMPONENTS ============
@@ -27,14 +27,14 @@ function Header() {
   };
 
   return (
-    <header className="bg-white shadow-sm sticky top-0 z-50">
+    <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="bg-gradient-to-r from-orange-500 to-red-600 p-2 rounded-lg">
-              <Trophy className="w-6 h-6 text-white" />
+          <Link to="/" className="flex items-center gap-3">
+            <div className="bg-slate-900 p-2.5 rounded-lg">
+              <Trophy className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+            <span className="text-xl font-semibold text-slate-900 tracking-tight">
               RunBrasil
             </span>
           </Link>
@@ -43,24 +43,24 @@ function Header() {
             {user ? (
               <>
                 {user.role === 'admin' && (
-                  <Link to="/admin" className="flex items-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-200">
+                  <Link to="/admin" className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">
                     <LayoutDashboard className="w-4 h-4" />
                     Admin
                   </Link>
                 )}
-                <Link to="/minha-conta" className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:border-orange-500">
-                  <div className="w-6 h-6 bg-orange-100 rounded-full flex items-center justify-center">
-                    <span className="text-xs font-bold text-orange-600">{user.name.charAt(0)}</span>
+                <Link to="/minha-conta" className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-slate-400 transition-colors">
+                  <div className="w-7 h-7 bg-slate-900 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-semibold text-white">{user.name.charAt(0)}</span>
                   </div>
                   {user.name.split(' ')[0]}
                 </Link>
-                <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-red-600" title="Sair">
+                <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-slate-900 transition-colors" title="Sair">
                   <LogOut className="w-5 h-5" />
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-orange-500">
+                <Link to="/login" className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-slate-400 transition-colors">
                   <User className="w-4 h-4" />
                   Entrar
                 </Link>
@@ -96,75 +96,401 @@ function ProtectedRoute({ children, requiredRole }: { children: ReactNode; requi
 
 function HomePage() {
   const { races } = useData();
+  const { user } = useAuth();
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedDate, setSelectedDate] = useState('all');
   
-  const filtered = races.filter(r => 
-    r.status !== 'draft' && 
-    (r.name.toLowerCase().includes(search.toLowerCase()) || r.city.toLowerCase().includes(search.toLowerCase()))
-  );
+  const categories = [
+    { id: 'all', name: 'Todos', icon: Trophy },
+    { id: 'corrida', name: 'Corrida', icon: Users },
+    { id: 'ciclismo', name: 'Ciclismo', icon: Calendar },
+    { id: 'triathlon', name: 'Triathlon', icon: Star },
+    { id: 'trail', name: 'Trail Run', icon: MapPin },
+  ];
+
+  const filtered = races.filter(r => {
+    const matchesSearch = r.status !== 'draft' && 
+      (r.name.toLowerCase().includes(search.toLowerCase()) || r.city.toLowerCase().includes(search.toLowerCase()));
+    const matchesCategory = selectedCategory === 'all' || r.sport === selectedCategory;
+    const matchesDate = selectedDate === 'all' || 
+      (selectedDate === 'week' && new Date(r.date) > new Date() && new Date(r.date) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)) ||
+      (selectedDate === 'month' && new Date(r.date) > new Date() && new Date(r.date) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+    
+    return matchesSearch && matchesCategory && matchesDate;
+  });
+
+  const featuredRaces = races.filter(r => r.featured && r.status === 'open').slice(0, 3);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-orange-600 to-red-700 py-20">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <h1 className="text-5xl font-bold text-white mb-4">Encontre sua próxima corrida</h1>
-          <p className="text-xl text-white/80 mb-8">Inscreva-se nos melhores eventos do Brasil</p>
-          <div className="max-w-2xl mx-auto flex gap-2 bg-white rounded-xl p-2">
-            <div className="flex-1 flex items-center gap-2 px-4">
-              <Search className="w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar evento ou cidade..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full py-2 focus:outline-none"
-              />
+    <div className="min-h-screen bg-slate-50">
+      {/* Hero Section - Professional Design */}
+      <section className="relative bg-slate-900 py-28 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"></div>
+        
+        <div className="relative max-w-7xl mx-auto px-4">
+          <div className="text-center mb-14">
+            <div className="inline-block mb-5">
+              <span className="px-5 py-2 bg-slate-800 border border-slate-700 text-slate-300 text-sm font-medium rounded-full">
+                +500 eventos disponíveis em todo Brasil
+              </span>
             </div>
-            <button className="px-6 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white font-semibold rounded-lg">
-              Buscar
-            </button>
+            <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 leading-tight tracking-tight">
+              Encontre seu próximo<br />
+              <span className="text-slate-400">desafio esportivo</span>
+            </h1>
+            <p className="text-lg text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+              A plataforma completa para inscrição em eventos esportivos. 
+              Corridas, ciclismo, triathlon e muito mais.
+            </p>
+          </div>
+
+          {/* Search Bar */}
+          <div className="max-w-3xl mx-auto">
+            <div className="bg-white rounded-xl shadow-2xl p-1.5 flex items-center gap-2">
+              <div className="flex-1 flex items-center gap-3 px-5">
+                <Search className="w-5 h-5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar evento, cidade ou modalidade..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full py-3.5 text-base text-slate-900 placeholder-slate-400 focus:outline-none"
+                />
+              </div>
+              <button className="px-8 py-3.5 bg-slate-900 text-white font-semibold rounded-lg hover:bg-slate-800 transition-colors">
+                Buscar
+              </button>
+            </div>
+
+            {/* Quick Filters */}
+            <div className="flex flex-wrap justify-center gap-2 mt-6">
+              {['São Paulo', 'Rio de Janeiro', 'Corrida', 'Ciclismo', 'Este mês'].map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setSearch(filter)}
+                  className="px-4 py-2 bg-slate-800 border border-slate-700 text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-700 transition-colors"
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Events Grid */}
-      <section className="max-w-7xl mx-auto px-4 py-12">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">{filtered.length} eventos encontrados</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filtered.map(race => (
-            <Link key={race.id} to={`/evento/${race.id}`} className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all border border-gray-100">
-              <div className="relative h-48">
-                <img src={race.image} alt={race.name} className="w-full h-full object-cover" />
-                <div className="absolute top-3 right-3">
-                  <span className={`px-3 py-1 text-xs font-semibold rounded-full ${
-                    race.status === 'open' ? 'bg-green-100 text-green-700' :
-                    race.status === 'closed' ? 'bg-orange-100 text-orange-700' :
-                    race.status === 'finished' ? 'bg-red-100 text-red-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {race.status === 'open' ? 'Inscrições Abertas' :
-                     race.status === 'closed' ? 'Inscrições Encerradas' :
-                     race.status === 'finished' ? 'Evento Encerrado' : 'Publicado'}
-                  </span>
-                </div>
+      {/* Featured Events */}
+      {featuredRaces.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 -mt-14 relative z-10 mb-16">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 p-8">
+            <div className="flex items-center justify-between mb-8">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">Eventos em Destaque</h2>
+                <p className="text-slate-500 text-sm mt-1">Os mais procurados da semana</p>
               </div>
-              <div className="p-4">
-                <h3 className="font-bold text-gray-900 mb-2 line-clamp-2">{race.name}</h3>
-                <div className="space-y-1 text-sm text-gray-500">
-                  <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-orange-500" />{format(parseISO(race.date), "dd/MM/yyyy")}</div>
-                  <div className="flex items-center gap-2"><MapPin className="w-4 h-4 text-orange-500" />{race.city}, {race.state}</div>
-                  <div className="flex items-center gap-2"><Users className="w-4 h-4 text-orange-500" />{race.participants} inscritos</div>
-                </div>
-                <div className="mt-3 pt-3 border-t flex justify-between items-center">
-                  <span className="text-lg font-bold text-orange-600">R$ {Math.min(...race.distances.map(d => d.price)).toFixed(2).replace('.', ',')}</span>
-                  <div className="flex items-center gap-1 text-sm"><Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />{race.rating}</div>
-                </div>
-              </div>
-            </Link>
+              <Link to="/" className="text-slate-900 font-semibold hover:text-slate-700 transition-colors">
+                Ver todos
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {featuredRaces.map((race) => (
+                <Link
+                  key={race.id}
+                  to={`/evento/${race.id}`}
+                  className="group relative overflow-hidden rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-lg transition-all duration-300"
+                >
+                  <div className="aspect-video relative">
+                    <img
+                      src={race.image}
+                      alt={race.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+                    <div className="absolute top-4 right-4">
+                      <span className="px-3 py-1 bg-slate-900 text-white text-xs font-semibold rounded">
+                        DESTAQUE
+                      </span>
+                    </div>
+                    <div className="absolute bottom-4 left-4 right-4 text-white">
+                      <h3 className="font-semibold text-lg mb-2 line-clamp-2">{race.name}</h3>
+                      <div className="flex items-center gap-3 text-sm text-slate-300">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-4 h-4" />
+                          <span>{format(parseISO(race.date), "dd/MM/yyyy")}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4" />
+                          <span>{race.city}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Category Filters */}
+      <section className="max-w-7xl mx-auto px-4 py-10">
+        <div className="flex items-center gap-3 overflow-x-auto pb-4 scrollbar-hide">
+          {categories.map((cat) => {
+            const IconComponent = cat.icon;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setSelectedCategory(cat.id)}
+                className={`flex items-center gap-2.5 px-6 py-3 rounded-lg font-medium whitespace-nowrap transition-all ${
+                  selectedCategory === cat.id
+                    ? 'bg-slate-900 text-white shadow-md'
+                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                }`}
+              >
+                <IconComponent className="w-5 h-5" />
+                <span>{cat.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Date Filters */}
+        <div className="flex items-center gap-3 mt-5">
+          <span className="text-sm font-semibold text-slate-700">Quando:</span>
+          {[
+            { id: 'all', name: 'Todas as datas' },
+            { id: 'week', name: 'Esta semana' },
+            { id: 'month', name: 'Este mês' },
+          ].map((date) => (
+            <button
+              key={date.id}
+              onClick={() => setSelectedDate(date.id)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                selectedDate === date.id
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              {date.name}
+            </button>
           ))}
         </div>
       </section>
+
+      {/* Events Grid - Professional Cards */}
+      <section className="max-w-7xl mx-auto px-4 pb-20">
+        <div className="flex items-center justify-between mb-10">
+          <div>
+            <h2 className="text-3xl font-bold text-slate-900">
+              {filtered.length} {filtered.length === 1 ? 'evento encontrado' : 'eventos encontrados'}
+            </h2>
+            <p className="text-slate-500 mt-1">
+              {selectedCategory !== 'all' && `${categories.find(c => c.id === selectedCategory)?.name} • `}
+              {selectedDate !== 'all' && `${selectedDate === 'week' ? 'Esta semana' : 'Este mês'}`}
+            </p>
+          </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="text-center py-20 bg-white rounded-xl border border-slate-200">
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-5">
+              <Search className="w-10 h-10 text-slate-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-slate-900 mb-2">Nenhum evento encontrado</h3>
+            <p className="text-slate-500 mb-8">Tente ajustar seus filtros ou buscar por outro termo</p>
+            <button
+              onClick={() => { setSearch(''); setSelectedCategory('all'); setSelectedDate('all'); }}
+              className="px-6 py-3 bg-slate-900 text-white font-semibold rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              Limpar filtros
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filtered.map(race => (
+              <Link
+                key={race.id}
+                to={`/evento/${race.id}`}
+                className="group bg-white rounded-xl overflow-hidden border border-slate-200 hover:border-slate-300 hover:shadow-lg transition-all duration-300"
+              >
+                {/* Image */}
+                <div className="relative h-52 overflow-hidden bg-slate-100">
+                  <img
+                    src={race.image}
+                    alt={race.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                  
+                  {/* Status Badge */}
+                  <div className="absolute top-4 right-4">
+                    <span className={`px-3 py-1.5 text-xs font-semibold rounded ${
+                      race.status === 'open' ? 'bg-emerald-500 text-white' :
+                      race.status === 'closed' ? 'bg-slate-500 text-white' :
+                      race.status === 'finished' ? 'bg-slate-700 text-white' :
+                      'bg-slate-400 text-white'
+                    }`}>
+                      {race.status === 'open' ? 'Inscrições Abertas' :
+                       race.status === 'closed' ? 'Inscrições Encerradas' :
+                       race.status === 'finished' ? 'Evento Encerrado' : 'Em breve'}
+                    </span>
+                  </div>
+
+                  {/* Discount Badge */}
+                  {race.discount && race.discount > 0 && (
+                    <div className="absolute top-4 left-4">
+                      <span className="px-3 py-1.5 bg-rose-600 text-white text-xs font-semibold rounded">
+                        {race.discount}% OFF
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Price */}
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <div className="flex items-end justify-between">
+                      <div>
+                        {race.discount ? (
+                          <>
+                            <span className="text-sm text-white/70 line-through">
+                              R$ {Math.min(...race.distances.map(d => d.price)).toFixed(2).replace('.', ',')}
+                            </span>
+                            <div className="text-2xl font-bold text-white">
+                              R$ {(Math.min(...race.distances.map(d => d.price)) * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-2xl font-bold text-white">
+                            R$ {Math.min(...race.distances.map(d => d.price)).toFixed(2).replace('.', ',')}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 bg-white/20 backdrop-blur-sm px-2.5 py-1.5 rounded">
+                        <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                        <span className="text-white font-semibold text-sm">{race.rating}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-5">
+                  <h3 className="font-semibold text-slate-900 text-lg mb-4 line-clamp-2 group-hover:text-slate-700 transition-colors">
+                    {race.name}
+                  </h3>
+                  
+                  <div className="space-y-2.5 mb-5">
+                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                      <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                      <span>{format(parseISO(race.date), "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                      <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                      <span className="truncate">{race.city}, {race.state}</span>
+                    </div>
+                  </div>
+
+                  {/* Distance Tags */}
+                  <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-100">
+                    {race.distances.slice(0, 3).map((d, i) => (
+                      <span
+                        key={i}
+                        className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-medium rounded"
+                      >
+                        {d.km}km
+                      </span>
+                    ))}
+                    {race.distances.length > 3 && (
+                      <span className="px-3 py-1.5 bg-slate-50 text-slate-500 text-xs font-medium rounded">
+                        +{race.distances.length - 3}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Stats Section */}
+      <section className="bg-slate-900 py-20">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="text-center mb-14">
+            <h2 className="text-3xl font-bold text-white mb-3">A maior plataforma de eventos esportivos</h2>
+            <p className="text-slate-400">Números que comprovam nossa excelência</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+            <div className="text-center">
+              <div className="text-5xl font-bold text-white mb-2">500+</div>
+              <div className="text-slate-400 text-sm font-medium">Eventos Ativos</div>
+            </div>
+            <div className="text-center">
+              <div className="text-5xl font-bold text-white mb-2">250K+</div>
+              <div className="text-slate-400 text-sm font-medium">Atletas Inscritos</div>
+            </div>
+            <div className="text-center">
+              <div className="text-5xl font-bold text-white mb-2">27</div>
+              <div className="text-slate-400 text-sm font-medium">Estados</div>
+            </div>
+            <div className="text-center">
+              <div className="text-5xl font-bold text-white mb-2">98%</div>
+              <div className="text-slate-400 text-sm font-medium">Satisfação</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-12">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="bg-slate-800 p-2.5 rounded-lg">
+                  <Trophy className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-xl font-semibold text-white">RunBrasil</span>
+              </div>
+              <p className="text-sm leading-relaxed">
+                A maior plataforma de inscrições para eventos esportivos do Brasil.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-white font-semibold mb-4">Para Atletas</h3>
+              <ul className="space-y-2.5 text-sm">
+                <li><Link to="/" className="hover:text-white transition-colors">Encontrar Eventos</Link></li>
+                <li><a href="#" className="hover:text-white transition-colors">Como Funciona</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Central de Ajuda</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-white font-semibold mb-4">Para Organizadores</h3>
+              <ul className="space-y-2.5 text-sm">
+                <li><a href="#" className="hover:text-white transition-colors">Criar Evento</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Planos e Preços</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Recursos</a></li>
+              </ul>
+            </div>
+            <div>
+              <h3 className="text-white font-semibold mb-4">Redes Sociais</h3>
+              <div className="flex gap-3">
+                <a href="#" className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </a>
+                <a href="#" className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                </a>
+                <a href="#" className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-colors">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/></svg>
+                </a>
+              </div>
+            </div>
+          </div>
+          <div className="pt-8 border-t border-slate-800 text-center text-sm">
+            <p>&copy; 2024 RunBrasil. Todos os direitos reservados.</p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
@@ -254,6 +580,7 @@ function RaceDetailsPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [selectedDistance, setSelectedDistance] = useState<number | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
   const race = id ? getRaceById(id) : null;
 
   if (!race) return <div className="text-center py-20">Evento não encontrado</div>;
@@ -264,63 +591,301 @@ function RaceDetailsPage() {
     navigate(`/inscricao/${race.id}?distance=${selectedDistance}`);
   };
 
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator.share({
+        title: race.name,
+        text: `Confira este evento: ${race.name}`,
+        url: window.location.href,
+      });
+    } else {
+      navigator.clipboard.writeText(window.location.href);
+      alert('Link copiado!');
+    }
+  };
+
+  const minPrice = Math.min(...race.distances.map(d => d.price));
+  const occupancyRate = (race.participants / race.maxParticipants) * 100;
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="relative h-80">
+      {/* Hero Section - Enhanced */}
+      <div className="relative h-96 md:h-[500px]">
         <img src={race.image} alt={race.name} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+        
+        {/* Action Buttons */}
+        <div className="absolute top-6 right-6 flex gap-3">
+          <button
+            onClick={() => setIsFavorite(!isFavorite)}
+            className={`p-3 rounded-full backdrop-blur-sm transition-all ${
+              isFavorite ? 'bg-red-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'
+            }`}
+          >
+            <Heart className={`w-6 h-6 ${isFavorite ? 'fill-current' : ''}`} />
+          </button>
+          <button
+            onClick={handleShare}
+            className="p-3 bg-white/20 backdrop-blur-sm text-white rounded-full hover:bg-white/30 transition-all"
+          >
+            <Share2 className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Content Overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-8">
           <div className="max-w-7xl mx-auto">
-            <h1 className="text-4xl font-bold text-white">{race.name}</h1>
+            <div className="flex items-center gap-3 mb-4">
+              {race.featured && (
+                <span className="px-4 py-1.5 bg-amber-500 text-amber-950 text-sm font-semibold rounded">
+                  DESTAQUE
+                </span>
+              )}
+              {race.discount && race.discount > 0 && (
+                <span className="px-4 py-1.5 bg-rose-600 text-white text-sm font-semibold rounded">
+                  {race.discount}% OFF
+                </span>
+              )}
+              <span className={`px-4 py-1.5 text-sm font-semibold rounded ${
+                race.status === 'open' ? 'bg-emerald-500 text-white' :
+                race.status === 'closed' ? 'bg-slate-500 text-white' :
+                'bg-slate-700 text-white'
+              }`}>
+                {race.status === 'open' ? 'Inscrições Abertas' :
+                 race.status === 'closed' ? 'Inscrições Encerradas' : 'Evento Encerrado'}
+              </span>
+            </div>
+            <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">{race.name}</h1>
+            <div className="flex items-center gap-6 text-white/90">
+              <div className="flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+                <span className="font-semibold">{race.rating}</span>
+                <span className="text-sm">({race.reviews} avaliações)</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-3"><Calendar className="w-5 h-5 text-orange-500" /><div><p className="text-xs text-gray-500">Data</p><p className="font-semibold">{format(parseISO(race.date), "dd/MM/yyyy")} às {race.time}</p></div></div>
-                <div className="flex items-center gap-3"><MapPin className="w-5 h-5 text-orange-500" /><div><p className="text-xs text-gray-500">Local</p><p className="font-semibold">{race.city}, {race.state}</p></div></div>
+            {/* Quick Info Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <Calendar className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase">Data</span>
+                </div>
+                <p className="font-bold text-gray-900">{format(parseISO(race.date), "dd 'de' MMMM", { locale: ptBR })}</p>
+                <p className="text-sm text-gray-500">{race.time}</p>
+              </div>
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <MapPin className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase">Local</span>
+                </div>
+                <p className="font-bold text-gray-900">{race.location}</p>
+                <p className="text-sm text-gray-500">{race.city}, {race.state}</p>
+              </div>
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <Trophy className="w-5 h-5 text-orange-600" />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-500 uppercase">Organizador</span>
+                </div>
+                <p className="font-bold text-gray-900 truncate">{race.organizer}</p>
               </div>
             </div>
 
+            {/* About */}
             <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h2 className="text-lg font-bold mb-3">Sobre o Evento</h2>
-              <p className="text-gray-600">{race.description}</p>
+              <h2 className="text-2xl font-bold mb-4">Sobre o Evento</h2>
+              <p className="text-gray-600 leading-relaxed">{race.description}</p>
+              
+              {/* Tags */}
+              {race.tags && race.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+                  {race.tags.map((tag, i) => (
+                    <span key={i} className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h2 className="text-lg font-bold mb-4">Distâncias e Valores</h2>
+            {/* Distances and Prices */}
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+              <h2 className="text-2xl font-bold mb-6 text-slate-900">Escolha sua Distância</h2>
               <div className="space-y-3">
                 {race.distances.map(d => (
-                  <button key={d.km} onClick={() => setSelectedDistance(d.km)} className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all ${selectedDistance === d.km ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}>
-                    <div><p className="font-bold">{d.km} km</p><p className="text-xs text-gray-500">{d.km <= 5 ? 'Iniciante' : d.km <= 10 ? 'Intermediário' : 'Avançado'}</p></div>
-                    <p className="text-xl font-bold text-orange-600">R$ {d.price.toFixed(2).replace('.', ',')}</p>
+                  <button
+                    key={d.km}
+                    onClick={() => setSelectedDistance(d.km)}
+                    className={`w-full flex items-center justify-between p-5 rounded-lg border-2 transition-all ${
+                      selectedDistance === d.km
+                        ? 'border-slate-900 bg-slate-50 shadow-sm'
+                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                        selectedDistance === d.km ? 'bg-slate-900' : 'bg-slate-100'
+                      }`}>
+                        <span className={`text-lg font-bold ${
+                          selectedDistance === d.km ? 'text-white' : 'text-slate-600'
+                        }`}>
+                          {d.km}
+                        </span>
+                      </div>
+                      <div className="text-left">
+                        <p className="font-semibold text-lg text-slate-900">{d.km} km</p>
+                        <p className="text-sm text-slate-500">
+                          {d.km <= 5 ? 'Iniciante' : d.km <= 10 ? 'Intermediário' : 'Avançado'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      {race.discount ? (
+                        <>
+                          <p className="text-sm text-slate-400 line-through">
+                            R$ {d.price.toFixed(2).replace('.', ',')}
+                          </p>
+                          <p className="text-2xl font-bold text-slate-900">
+                            R$ {(d.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-2xl font-bold text-slate-900">
+                          R$ {d.price.toFixed(2).replace('.', ',')}
+                        </p>
+                      )}
+                    </div>
                   </button>
                 ))}
               </div>
             </div>
+
+            {/* What's Included */}
+            {race.includes && race.includes.length > 0 && (
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                <h2 className="text-2xl font-bold mb-4 text-slate-900">O que está incluso</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {race.includes.map((item, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                      <span className="text-slate-700">{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Rules */}
+            {race.rules && race.rules.length > 0 && (
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                <h2 className="text-2xl font-bold mb-4 text-slate-900">Regras e Informações</h2>
+                <div className="space-y-3">
+                  {race.rules.map((rule, i) => (
+                    <div key={i} className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-slate-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-slate-700">{rule}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Sidebar - Sticky Registration Card */}
           <div>
-            <div className="bg-white rounded-xl p-6 shadow-sm sticky top-20">
-              <h3 className="font-bold mb-4">Inscreva-se</h3>
+            <div className="bg-white rounded-xl p-6 shadow-lg border border-slate-200 sticky top-6">
+              <h3 className="text-xl font-bold mb-4 text-slate-900">Garanta sua vaga</h3>
+              
+              {/* Occupancy Bar */}
+              <div className="mb-4">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-slate-600">Vagas preenchidas</span>
+                  <span className="font-semibold text-slate-900">{Math.round(occupancyRate)}%</span>
+                </div>
+                <div className="w-full bg-slate-200 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all ${
+                      occupancyRate > 80 ? 'bg-rose-500' :
+                      occupancyRate > 50 ? 'bg-amber-500' : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${occupancyRate}%` }}
+                  ></div>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  {race.participants.toLocaleString('pt-BR')} de {race.maxParticipants.toLocaleString('pt-BR')} vagas
+                </p>
+              </div>
+
+              {/* Selected Distance */}
               {selectedDistance ? (
-                <div className="mb-4 p-3 bg-orange-50 rounded-lg">
-                  <p className="text-sm text-gray-500">Distância selecionada</p>
-                  <p className="font-bold">{selectedDistance} km</p>
-                  <p className="text-2xl font-bold text-orange-600">R$ {race.distances.find(d => d.km === selectedDistance)?.price.toFixed(2).replace('.', ',')}</p>
+                <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <p className="text-sm text-slate-600 mb-1">Distância selecionada</p>
+                  <p className="text-2xl font-bold text-slate-900">{selectedDistance} km</p>
+                  {race.discount ? (
+                    <>
+                      <p className="text-sm text-slate-400 line-through mt-2">
+                        R$ {race.distances.find(d => d.km === selectedDistance)?.price.toFixed(2).replace('.', ',')}
+                      </p>
+                      <p className="text-3xl font-bold text-slate-900">
+                        R$ {(race.distances.find(d => d.km === selectedDistance)!.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-3xl font-bold text-slate-900 mt-2">
+                      R$ {race.distances.find(d => d.km === selectedDistance)?.price.toFixed(2).replace('.', ',')}
+                    </p>
+                  )}
                 </div>
               ) : (
-                <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                  <p className="text-sm text-gray-500">Selecione uma distância</p>
+                <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <p className="text-sm text-slate-500">Selecione uma distância</p>
+                  <p className="text-2xl font-bold text-slate-400 mt-2">
+                    A partir de R$ {minPrice.toFixed(2).replace('.', ',')}
+                  </p>
                 </div>
               )}
-              <button onClick={handleRegister} disabled={!selectedDistance || race.status !== 'open'} className={`w-full py-3 rounded-xl font-semibold text-white ${selectedDistance && race.status === 'open' ? 'bg-gradient-to-r from-orange-500 to-red-600' : 'bg-gray-300 cursor-not-allowed'}`}>
+
+              {/* Register Button */}
+              <button
+                onClick={handleRegister}
+                disabled={!selectedDistance || race.status !== 'open'}
+                className={`w-full py-4 rounded-lg font-semibold text-lg transition-all ${
+                  selectedDistance && race.status === 'open'
+                    ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-md'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              >
                 {race.status === 'open' ? 'Realizar Inscrição' : 'Inscrições Encerradas'}
               </button>
+
+              {/* Trust Badges */}
+              <div className="mt-6 pt-6 border-t border-slate-200 space-y-3">
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <Shield className="w-4 h-4 text-emerald-600" />
+                  <span>Pagamento 100% seguro</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  <span>Confirmação instantânea</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm text-slate-600">
+                  <CreditCard className="w-4 h-4 text-slate-600" />
+                  <span>PIX, Cartão ou Maquininha</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
