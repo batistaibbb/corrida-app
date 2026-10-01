@@ -4,6 +4,7 @@ import { DataProvider, useData } from './contexts/DataContext';
 import { useState, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
 import DiagnosticPage from './pages/DiagnosticPage';
+import TestSupabase from './pages/TestSupabase';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -1053,6 +1054,7 @@ function App() {
             <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
             <Route path="/minha-conta" element={<ProtectedRoute requiredRole="participant"><ParticipantDashboard /></ProtectedRoute>} />
             <Route path="/diagnostico" element={<DiagnosticPage />} />
+            <Route path="/teste-supabase" element={<TestSupabase />} />
           </Routes>
         </DataProvider>
       </AuthProvider>

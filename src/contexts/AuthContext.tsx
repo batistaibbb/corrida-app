@@ -128,29 +128,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
+    console.log('🔐 Tentando login:', { email, isDemoMode, hasSupabase: !!supabase });
+    
     if (!isDemoMode && supabase) {
+      console.log('✅ Usando Supabase Auth');
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
+        console.log('📡 Resposta Supabase:', { data, error });
+
         if (error) {
+          console.error('❌ Erro Supabase:', error);
           return { success: false, message: error.message };
         }
 
         if (data.user) {
+          console.log('✅ Login Supabase sucesso:', data.user.email);
           await loadUserProfile(data.user.id);
           return { success: true, message: 'Login realizado com sucesso!' };
         }
 
         return { success: false, message: 'Erro ao fazer login' };
       } catch (err) {
-        console.error('Error in login:', err);
+        console.error('❌ Erro no login Supabase:', err);
         return { success: false, message: 'Erro ao fazer login' };
       }
     }
 
+    console.log('⚠️ Usando localStorage (modo demo)');
     const users = getUsers();
     const found = users.find(u => u.email === email && u.password === password);
     
