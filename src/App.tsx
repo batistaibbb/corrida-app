@@ -31,7 +31,7 @@ function Header() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <Link to="/" className="flex items-center gap-3">
-            <div className="bg-slate-900 p-2.5 rounded-lg">
+            <div className="bg-emerald-600 p-2.5 rounded-lg">
               <Trophy className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-semibold text-slate-900 tracking-tight">
@@ -43,24 +43,24 @@ function Header() {
             {user ? (
               <>
                 {user.role === 'admin' && (
-                  <Link to="/admin" className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-200 transition-colors">
+                  <Link to="/admin" className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-100 transition-colors">
                     <LayoutDashboard className="w-4 h-4" />
                     Admin
                   </Link>
                 )}
-                <Link to="/minha-conta" className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-slate-400 transition-colors">
-                  <div className="w-7 h-7 bg-slate-900 rounded-full flex items-center justify-center">
+                <Link to="/minha-conta" className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-emerald-400 transition-colors">
+                  <div className="w-7 h-7 bg-emerald-600 rounded-full flex items-center justify-center">
                     <span className="text-xs font-semibold text-white">{user.name.charAt(0)}</span>
                   </div>
                   {user.name.split(' ')[0]}
                 </Link>
-                <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-slate-900 transition-colors" title="Sair">
+                <button onClick={handleLogout} className="p-2 text-gray-500 hover:text-emerald-600 transition-colors" title="Sair">
                   <LogOut className="w-5 h-5" />
                 </button>
               </>
             ) : (
               <>
-                <Link to="/login" className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-slate-400 transition-colors">
+                <Link to="/login" className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:border-emerald-400 transition-colors">
                   <User className="w-4 h-4" />
                   Entrar
                 </Link>
@@ -75,7 +75,7 @@ function Header() {
 
 function ProtectedRoute({ children, requiredRole }: { children: ReactNode; requiredRole?: 'admin' | 'participant' }) {
   const { user } = useAuth();
-  if (!user) return <Link to="/login" className="block text-center py-20 text-orange-600">Faça login para continuar →</Link>;
+  if (!user) return <Link to="/login" className="block text-center py-20 text-emerald-600">Faça login para continuar →</Link>;
   // Admins can access any page, participants can only access participant pages
   const userRole = user.role as string;
   if (requiredRole && userRole !== requiredRole && userRole !== 'admin') {
@@ -83,9 +83,9 @@ function ProtectedRoute({ children, requiredRole }: { children: ReactNode; requi
       <p className="text-xl text-gray-700 mb-4">Acesso negado</p>
       <p className="text-gray-500 mb-4">Você precisa de permissão para acessar esta página.</p>
       {userRole === 'admin' ? (
-        <Link to="/admin" className="text-orange-600 hover:underline">Ir para Dashboard Admin →</Link>
+        <Link to="/admin" className="text-emerald-600 hover:underline">Ir para Dashboard Admin →</Link>
       ) : (
-        <Link to="/" className="text-orange-600 hover:underline">Voltar para a página inicial →</Link>
+        <Link to="/" className="text-emerald-600 hover:underline">Voltar para a página inicial →</Link>
       )}
     </div>;
   }
@@ -124,22 +124,22 @@ function HomePage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Hero Section - Professional Design */}
-      <section className="relative bg-slate-900 py-28 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900"></div>
+      {/* Hero Section - Professional Design with Green/Blue Palette */}
+      <section className="relative bg-gradient-to-br from-emerald-700 via-emerald-600 to-sky-600 py-28 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-700/95 via-emerald-600/90 to-sky-600/95"></div>
         
         <div className="relative max-w-7xl mx-auto px-4">
           <div className="text-center mb-14">
             <div className="inline-block mb-5">
-              <span className="px-5 py-2 bg-slate-800 border border-slate-700 text-slate-300 text-sm font-medium rounded-full">
+              <span className="px-5 py-2 bg-white/10 backdrop-blur-sm border border-white/20 text-white text-sm font-medium rounded-full">
                 +500 eventos disponíveis em todo Brasil
               </span>
             </div>
             <h1 className="text-5xl md:text-6xl font-bold text-white mb-6 leading-tight tracking-tight">
               Encontre seu próximo<br />
-              <span className="text-slate-400">desafio esportivo</span>
+              <span className="text-emerald-100">desafio esportivo</span>
             </h1>
-            <p className="text-lg text-slate-400 mb-10 max-w-2xl mx-auto leading-relaxed">
+            <p className="text-lg text-emerald-50 mb-10 max-w-2xl mx-auto leading-relaxed">
               A plataforma completa para inscrição em eventos esportivos. 
               Corridas, ciclismo, triathlon e muito mais.
             </p>
@@ -158,7 +158,7 @@ function HomePage() {
                   className="w-full py-3.5 text-base text-slate-900 placeholder-slate-400 focus:outline-none"
                 />
               </div>
-              <button className="px-8 py-3.5 bg-slate-900 text-white font-semibold rounded-lg hover:bg-slate-800 transition-colors">
+              <button className="px-8 py-3.5 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition-colors">
                 Buscar
               </button>
             </div>
@@ -169,7 +169,7 @@ function HomePage() {
                 <button
                   key={filter}
                   onClick={() => setSearch(filter)}
-                  className="px-4 py-2 bg-slate-800 border border-slate-700 text-slate-300 text-sm font-medium rounded-lg hover:bg-slate-700 transition-colors"
+                  className="px-4 py-2 bg-white/10 backdrop-blur-sm border border-white/20 text-white text-sm font-medium rounded-lg hover:bg-white/20 transition-colors"
                 >
                   {filter}
                 </button>
@@ -243,8 +243,8 @@ function HomePage() {
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`flex items-center gap-2.5 px-6 py-3 rounded-lg font-medium whitespace-nowrap transition-all ${
                   selectedCategory === cat.id
-                    ? 'bg-slate-900 text-white shadow-md'
-                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-white text-slate-700 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300'
                 }`}
               >
                 <IconComponent className="w-5 h-5" />
@@ -267,8 +267,8 @@ function HomePage() {
               onClick={() => setSelectedDate(date.id)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 selectedDate === date.id
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                  ? 'bg-sky-600 text-white'
+                  : 'bg-white text-slate-600 hover:bg-sky-50 border border-slate-200 hover:border-sky-300'
               }`}
             >
               {date.name}
@@ -277,7 +277,7 @@ function HomePage() {
         </div>
       </section>
 
-      {/* Events Grid - Professional Cards */}
+      {/* Events Grid - Professional Cards with Green/Blue Palette */}
       <section className="max-w-7xl mx-auto px-4 pb-20">
         <div className="flex items-center justify-between mb-10">
           <div>
@@ -293,14 +293,14 @@ function HomePage() {
 
         {filtered.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-xl border border-slate-200">
-            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-5">
-              <Search className="w-10 h-10 text-slate-400" />
+            <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-5">
+              <Search className="w-10 h-10 text-emerald-600" />
             </div>
             <h3 className="text-xl font-semibold text-slate-900 mb-2">Nenhum evento encontrado</h3>
             <p className="text-slate-500 mb-8">Tente ajustar seus filtros ou buscar por outro termo</p>
             <button
               onClick={() => { setSearch(''); setSelectedCategory('all'); setSelectedDate('all'); }}
-              className="px-6 py-3 bg-slate-900 text-white font-semibold rounded-lg hover:bg-slate-800 transition-colors"
+              className="px-6 py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition-colors"
             >
               Limpar filtros
             </button>
@@ -311,7 +311,7 @@ function HomePage() {
               <Link
                 key={race.id}
                 to={`/evento/${race.id}`}
-                className="group bg-white rounded-xl overflow-hidden border border-slate-200 hover:border-slate-300 hover:shadow-lg transition-all duration-300"
+                className="group bg-white rounded-xl overflow-hidden border border-slate-200 hover:border-emerald-300 hover:shadow-lg transition-all duration-300"
               >
                 {/* Image */}
                 <div className="relative h-52 overflow-hidden bg-slate-100">
@@ -374,17 +374,17 @@ function HomePage() {
 
                 {/* Content */}
                 <div className="p-5">
-                  <h3 className="font-semibold text-slate-900 text-lg mb-4 line-clamp-2 group-hover:text-slate-700 transition-colors">
+                  <h3 className="font-semibold text-slate-900 text-lg mb-4 line-clamp-2 group-hover:text-emerald-600 transition-colors">
                     {race.name}
                   </h3>
                   
                   <div className="space-y-2.5 mb-5">
                     <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                      <Calendar className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                      <Calendar className="w-4 h-4 text-emerald-500 flex-shrink-0" />
                       <span>{format(parseISO(race.date), "dd 'de' MMMM, yyyy", { locale: ptBR })}</span>
                     </div>
                     <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                      <MapPin className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                      <MapPin className="w-4 h-4 text-sky-500 flex-shrink-0" />
                       <span className="truncate">{race.city}, {race.state}</span>
                     </div>
                   </div>
@@ -394,7 +394,7 @@ function HomePage() {
                     {race.distances.slice(0, 3).map((d, i) => (
                       <span
                         key={i}
-                        className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-medium rounded"
+                        className="px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium rounded"
                       >
                         {d.km}km
                       </span>
@@ -412,41 +412,41 @@ function HomePage() {
         )}
       </section>
 
-      {/* Stats Section */}
-      <section className="bg-slate-900 py-20">
+      {/* Stats Section - Green/Blue Gradient */}
+      <section className="bg-gradient-to-br from-emerald-700 via-emerald-600 to-sky-600 py-20">
         <div className="max-w-7xl mx-auto px-4">
           <div className="text-center mb-14">
             <h2 className="text-3xl font-bold text-white mb-3">A maior plataforma de eventos esportivos</h2>
-            <p className="text-slate-400">Números que comprovam nossa excelência</p>
+            <p className="text-emerald-50">Números que comprovam nossa excelência</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             <div className="text-center">
               <div className="text-5xl font-bold text-white mb-2">500+</div>
-              <div className="text-slate-400 text-sm font-medium">Eventos Ativos</div>
+              <div className="text-emerald-100 text-sm font-medium">Eventos Ativos</div>
             </div>
             <div className="text-center">
               <div className="text-5xl font-bold text-white mb-2">250K+</div>
-              <div className="text-slate-400 text-sm font-medium">Atletas Inscritos</div>
+              <div className="text-emerald-100 text-sm font-medium">Atletas Inscritos</div>
             </div>
             <div className="text-center">
               <div className="text-5xl font-bold text-white mb-2">27</div>
-              <div className="text-slate-400 text-sm font-medium">Estados</div>
+              <div className="text-emerald-100 text-sm font-medium">Estados</div>
             </div>
             <div className="text-center">
               <div className="text-5xl font-bold text-white mb-2">98%</div>
-              <div className="text-slate-400 text-sm font-medium">Satisfação</div>
+              <div className="text-emerald-100 text-sm font-medium">Satisfação</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
+      {/* Footer - Green/Blue Professional */}
       <footer className="bg-slate-900 border-t border-slate-800 text-slate-400 py-12">
         <div className="max-w-7xl mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <div className="bg-slate-800 p-2.5 rounded-lg">
+                <div className="bg-emerald-600 p-2.5 rounded-lg">
                   <Trophy className="w-5 h-5 text-white" />
                 </div>
                 <span className="text-xl font-semibold text-white">RunBrasil</span>
@@ -458,29 +458,29 @@ function HomePage() {
             <div>
               <h3 className="text-white font-semibold mb-4">Para Atletas</h3>
               <ul className="space-y-2.5 text-sm">
-                <li><Link to="/" className="hover:text-white transition-colors">Encontrar Eventos</Link></li>
-                <li><a href="#" className="hover:text-white transition-colors">Como Funciona</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Central de Ajuda</a></li>
+                <li><Link to="/" className="hover:text-emerald-400 transition-colors">Encontrar Eventos</Link></li>
+                <li><a href="#" className="hover:text-emerald-400 transition-colors">Como Funciona</a></li>
+                <li><a href="#" className="hover:text-emerald-400 transition-colors">Central de Ajuda</a></li>
               </ul>
             </div>
             <div>
               <h3 className="text-white font-semibold mb-4">Para Organizadores</h3>
               <ul className="space-y-2.5 text-sm">
-                <li><a href="#" className="hover:text-white transition-colors">Criar Evento</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Planos e Preços</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Recursos</a></li>
+                <li><a href="#" className="hover:text-emerald-400 transition-colors">Criar Evento</a></li>
+                <li><a href="#" className="hover:text-emerald-400 transition-colors">Planos e Preços</a></li>
+                <li><a href="#" className="hover:text-emerald-400 transition-colors">Recursos</a></li>
               </ul>
             </div>
             <div>
               <h3 className="text-white font-semibold mb-4">Redes Sociais</h3>
               <div className="flex gap-3">
-                <a href="#" className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-colors">
+                <a href="#" className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center hover:bg-emerald-600 transition-colors">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                 </a>
-                <a href="#" className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-colors">
+                <a href="#" className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center hover:bg-emerald-600 transition-colors">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
                 </a>
-                <a href="#" className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center hover:bg-slate-700 transition-colors">
+                <a href="#" className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center hover:bg-emerald-600 transition-colors">
                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/></svg>
                 </a>
               </div>
@@ -528,46 +528,46 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-sky-50 to-emerald-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8">
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-600 rounded-xl flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-gradient-to-br from-emerald-600 to-sky-600 rounded-xl flex items-center justify-center mx-auto mb-4">
             <Trophy className="w-8 h-8 text-white" />
           </div>
-          <h2 className="text-2xl font-bold">{isLogin ? 'Entrar' : 'Criar Conta'}</h2>
+          <h2 className="text-2xl font-bold text-slate-900">{isLogin ? 'Entrar' : 'Criar Conta'}</h2>
         </div>
 
-        {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">{error}</div>}
+        {error && <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && <input type="text" placeholder="Nome completo" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-orange-500" required />}
-          <input type="email" placeholder="E-mail" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-orange-500" required />
+          {!isLogin && <input type="text" placeholder="Nome completo" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />}
+          <input type="email" placeholder="E-mail" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
           <div className="relative">
-            <input type={showPassword ? 'text' : 'password'} placeholder="Senha" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-orange-500" required />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+            <input type={showPassword ? 'text' : 'password'} placeholder="Senha" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
           {!isLogin && (
             <>
-              <input type="text" placeholder="CPF" value={formData.cpf} onChange={(e) => setFormData({...formData, cpf: e.target.value})} className="w-full px-4 py-3 border rounded-xl" required />
-              <input type="tel" placeholder="Telefone" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-3 border rounded-xl" required />
+              <input type="text" placeholder="CPF" value={formData.cpf} onChange={(e) => setFormData({...formData, cpf: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
+              <input type="tel" placeholder="Telefone" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
             </>
           )}
-          <button type="submit" className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold rounded-xl">{isLogin ? 'Entrar' : 'Criar Conta'}</button>
+          <button type="submit" className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl hover:from-emerald-700 hover:to-sky-700 transition-all">{isLogin ? 'Entrar' : 'Criar Conta'}</button>
         </form>
 
         {isLogin && (
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
-            <p className="text-xs font-semibold text-blue-700 mb-2">🔑 Credenciais de teste:</p>
-            <p className="text-xs text-blue-600"><strong>Admin:</strong> admin@runbrasil.com.br / admin123</p>
-            <p className="text-xs text-blue-600"><strong>Participante:</strong> joao@email.com / 123456</p>
+          <div className="mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
+            <p className="text-xs font-semibold text-sky-700 mb-2">Credenciais de teste:</p>
+            <p className="text-xs text-sky-600"><strong>Admin:</strong> admin@runbrasil.com.br / admin123</p>
+            <p className="text-xs text-sky-600"><strong>Participante:</strong> joao@email.com / 123456</p>
           </div>
         )}
 
-        <p className="text-center text-sm text-gray-600 mt-6">
+        <p className="text-center text-sm text-slate-600 mt-6">
           {isLogin ? 'Não tem conta? ' : 'Já tem conta? '}
-          <button onClick={() => { setIsLogin(!isLogin); setError(''); }} className="text-orange-600 font-semibold">{isLogin ? 'Cadastre-se' : 'Fazer login'}</button>
+          <button onClick={() => { setIsLogin(!isLogin); setError(''); }} className="text-emerald-600 font-semibold hover:text-emerald-700">{isLogin ? 'Cadastre-se' : 'Fazer login'}</button>
         </p>
       </div>
     </div>
@@ -673,47 +673,47 @@ function RaceDetailsPage() {
           <div className="lg:col-span-2 space-y-6">
             {/* Quick Info Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <Calendar className="w-5 h-5 text-orange-600" />
+                  <div className="p-2 bg-emerald-50 rounded-lg">
+                    <Calendar className="w-5 h-5 text-emerald-600" />
                   </div>
                   <span className="text-xs font-semibold text-gray-500 uppercase">Data</span>
                 </div>
                 <p className="font-bold text-gray-900">{format(parseISO(race.date), "dd 'de' MMMM", { locale: ptBR })}</p>
                 <p className="text-sm text-gray-500">{race.time}</p>
               </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <MapPin className="w-5 h-5 text-orange-600" />
+                  <div className="p-2 bg-sky-50 rounded-lg">
+                    <MapPin className="w-5 h-5 text-sky-600" />
                   </div>
-                  <span className="text-xs font-semibold text-gray-500 uppercase">Local</span>
+                  <span className="text-xs font-semibold text-slate-500 uppercase">Local</span>
                 </div>
-                <p className="font-bold text-gray-900">{race.location}</p>
-                <p className="text-sm text-gray-500">{race.city}, {race.state}</p>
+                <p className="font-bold text-slate-900">{race.location}</p>
+                <p className="text-sm text-slate-500">{race.city}, {race.state}</p>
               </div>
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-200">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-orange-100 rounded-lg">
-                    <Trophy className="w-5 h-5 text-orange-600" />
+                  <div className="p-2 bg-emerald-50 rounded-lg">
+                    <Trophy className="w-5 h-5 text-emerald-600" />
                   </div>
-                  <span className="text-xs font-semibold text-gray-500 uppercase">Organizador</span>
+                  <span className="text-xs font-semibold text-slate-500 uppercase">Organizador</span>
                 </div>
-                <p className="font-bold text-gray-900 truncate">{race.organizer}</p>
+                <p className="font-bold text-slate-900 truncate">{race.organizer}</p>
               </div>
             </div>
 
             {/* About */}
-            <div className="bg-white rounded-xl p-6 shadow-sm">
-              <h2 className="text-2xl font-bold mb-4">Sobre o Evento</h2>
-              <p className="text-gray-600 leading-relaxed">{race.description}</p>
+            <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+              <h2 className="text-2xl font-bold mb-4 text-slate-900">Sobre o Evento</h2>
+              <p className="text-slate-600 leading-relaxed">{race.description}</p>
               
               {/* Tags */}
               {race.tags && race.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-slate-200">
                   {race.tags.map((tag, i) => (
-                    <span key={i} className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded-full">
+                    <span key={i} className="px-3 py-1 bg-emerald-50 text-emerald-700 text-sm rounded-full">
                       #{tag}
                     </span>
                   ))}
@@ -731,13 +731,13 @@ function RaceDetailsPage() {
                     onClick={() => setSelectedDistance(d.km)}
                     className={`w-full flex items-center justify-between p-5 rounded-lg border-2 transition-all ${
                       selectedDistance === d.km
-                        ? 'border-slate-900 bg-slate-50 shadow-sm'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        ? 'border-emerald-600 bg-emerald-50 shadow-sm'
+                        : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50'
                     }`}
                   >
                     <div className="flex items-center gap-4">
                       <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        selectedDistance === d.km ? 'bg-slate-900' : 'bg-slate-100'
+                        selectedDistance === d.km ? 'bg-emerald-600' : 'bg-slate-100'
                       }`}>
                         <span className={`text-lg font-bold ${
                           selectedDistance === d.km ? 'text-white' : 'text-slate-600'
@@ -758,12 +758,12 @@ function RaceDetailsPage() {
                           <p className="text-sm text-slate-400 line-through">
                             R$ {d.price.toFixed(2).replace('.', ',')}
                           </p>
-                          <p className="text-2xl font-bold text-slate-900">
+                          <p className="text-2xl font-bold text-emerald-600">
                             R$ {(d.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
                           </p>
                         </>
                       ) : (
-                        <p className="text-2xl font-bold text-slate-900">
+                        <p className="text-2xl font-bold text-emerald-600">
                           R$ {d.price.toFixed(2).replace('.', ',')}
                         </p>
                       )}
@@ -831,20 +831,20 @@ function RaceDetailsPage() {
 
               {/* Selected Distance */}
               {selectedDistance ? (
-                <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                  <p className="text-sm text-slate-600 mb-1">Distância selecionada</p>
+                <div className="mb-4 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
+                  <p className="text-sm text-emerald-700 mb-1">Distância selecionada</p>
                   <p className="text-2xl font-bold text-slate-900">{selectedDistance} km</p>
                   {race.discount ? (
                     <>
                       <p className="text-sm text-slate-400 line-through mt-2">
                         R$ {race.distances.find(d => d.km === selectedDistance)?.price.toFixed(2).replace('.', ',')}
                       </p>
-                      <p className="text-3xl font-bold text-slate-900">
+                      <p className="text-3xl font-bold text-emerald-600">
                         R$ {(race.distances.find(d => d.km === selectedDistance)!.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
                       </p>
                     </>
                   ) : (
-                    <p className="text-3xl font-bold text-slate-900 mt-2">
+                    <p className="text-3xl font-bold text-emerald-600 mt-2">
                       R$ {race.distances.find(d => d.km === selectedDistance)?.price.toFixed(2).replace('.', ',')}
                     </p>
                   )}
@@ -864,7 +864,7 @@ function RaceDetailsPage() {
                 disabled={!selectedDistance || race.status !== 'open'}
                 className={`w-full py-4 rounded-lg font-semibold text-lg transition-all ${
                   selectedDistance && race.status === 'open'
-                    ? 'bg-slate-900 text-white hover:bg-slate-800 shadow-md'
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md'
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
               >
@@ -882,7 +882,7 @@ function RaceDetailsPage() {
                   <span>Confirmação instantânea</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600">
-                  <CreditCard className="w-4 h-4 text-slate-600" />
+                  <CreditCard className="w-4 h-4 text-sky-600" />
                   <span>PIX, Cartão ou Maquininha</span>
                 </div>
               </div>
@@ -1139,27 +1139,27 @@ function PaymentPage() {
                 </div>
 
                 {selectedMethod === 'pix' && (
-                  <button onClick={handlePixPayment} disabled={processing} className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl disabled:opacity-50">
+                  <button onClick={handlePixPayment} disabled={processing} className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50 hover:from-emerald-700 hover:to-sky-700 transition-all">
                     {processing ? 'Gerando PIX...' : 'Gerar PIX'}
                   </button>
                 )}
 
                 {selectedMethod === 'credit_card' && (
                   <div className="space-y-3">
-                    <input type="text" value={cardData.number} onChange={(e) => setCardData({...cardData, number: e.target.value})} placeholder="Número do cartão" maxLength={19} className="w-full px-4 py-3 border rounded-xl" />
-                    <input type="text" value={cardData.name} onChange={(e) => setCardData({...cardData, name: e.target.value})} placeholder="Nome no cartão" className="w-full px-4 py-3 border rounded-xl" />
+                    <input type="text" value={cardData.number} onChange={(e) => setCardData({...cardData, number: e.target.value})} placeholder="Número do cartão" maxLength={19} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500" />
+                    <input type="text" value={cardData.name} onChange={(e) => setCardData({...cardData, name: e.target.value})} placeholder="Nome no cartão" className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500" />
                     <div className="grid grid-cols-2 gap-3">
-                      <input type="text" value={cardData.expiry} onChange={(e) => setCardData({...cardData, expiry: e.target.value})} placeholder="MM/AA" maxLength={5} className="px-4 py-3 border rounded-xl" />
-                      <input type="text" value={cardData.cvv} onChange={(e) => setCardData({...cardData, cvv: e.target.value})} placeholder="CVV" maxLength={4} className="px-4 py-3 border rounded-xl" />
+                      <input type="text" value={cardData.expiry} onChange={(e) => setCardData({...cardData, expiry: e.target.value})} placeholder="MM/AA" maxLength={5} className="px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500" />
+                      <input type="text" value={cardData.cvv} onChange={(e) => setCardData({...cardData, cvv: e.target.value})} placeholder="CVV" maxLength={4} className="px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500" />
                     </div>
-                    <select value={cardData.installments} onChange={(e) => setCardData({...cardData, installments: e.target.value})} className="w-full px-4 py-3 border rounded-xl">
+                    <select value={cardData.installments} onChange={(e) => setCardData({...cardData, installments: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500">
                       <option value="1">1x de R$ {total.toFixed(2).replace('.', ',')} (sem juros)</option>
                       <option value="2">2x de R$ {(total / 2).toFixed(2).replace('.', ',')} (sem juros)</option>
                       <option value="3">3x de R$ {(total / 3).toFixed(2).replace('.', ',')} (sem juros)</option>
                       <option value="6">6x de R$ {(total / 6 * 1.05).toFixed(2).replace('.', ',')} (com juros)</option>
                       <option value="12">12x de R$ {(total / 12 * 1.12).toFixed(2).replace('.', ',')} (com juros)</option>
                     </select>
-                    <button onClick={handleCardPayment} disabled={processing} className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2">
+                    <button onClick={handleCardPayment} disabled={processing} className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 hover:from-emerald-700 hover:to-sky-700 transition-all">
                       <Shield className="w-4 h-4" />
                       {processing ? 'Processando...' : `Pagar R$ ${total.toFixed(2).replace('.', ',')}`}
                     </button>
@@ -1168,23 +1168,23 @@ function PaymentPage() {
               </div>
             ) : (
               <div className="bg-white rounded-xl p-6 shadow-sm text-center">
-                <QrCode className="w-16 h-16 text-green-600 mx-auto mb-4" />
-                <h2 className="text-xl font-bold mb-2">Pague com PIX</h2>
-                <p className="text-sm text-gray-500 mb-6">Escaneie o QR Code ou copie o código</p>
-                <div className="w-56 h-56 mx-auto bg-gray-100 rounded-xl mb-6 flex items-center justify-center">
-                  <div className="text-gray-400">QR Code</div>
+                <QrCode className="w-16 h-16 text-emerald-600 mx-auto mb-4" />
+                <h2 className="text-xl font-bold mb-2 text-slate-900">Pague com PIX</h2>
+                <p className="text-sm text-slate-500 mb-6">Escaneie o QR Code ou copie o código</p>
+                <div className="w-56 h-56 mx-auto bg-slate-100 rounded-xl mb-6 flex items-center justify-center">
+                  <div className="text-slate-400">QR Code</div>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                  <p className="text-xs text-gray-500 mb-1">Código PIX:</p>
-                  <p className="text-xs font-mono break-all">{pixCode}</p>
-                  <button onClick={copyPixCode} className="mt-2 text-xs text-orange-600 flex items-center gap-1 mx-auto">
+                <div className="bg-slate-50 rounded-lg p-3 mb-4">
+                  <p className="text-xs text-slate-500 mb-1">Código PIX:</p>
+                  <p className="text-xs font-mono break-all text-slate-700">{pixCode}</p>
+                  <button onClick={copyPixCode} className="mt-2 text-xs text-emerald-600 flex items-center gap-1 mx-auto hover:text-emerald-700">
                     {copied ? <><Check className="w-3 h-3" /> Copiado!</> : <><Copy className="w-3 h-3" /> Copiar código</>}
                   </button>
                 </div>
-                <button onClick={simulatePixApproval} className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl">
-                  ✅ Simular Aprovação (Demo)
+                <button onClick={simulatePixApproval} className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl hover:from-emerald-700 hover:to-sky-700 transition-all">
+                  Simular Aprovação (Demo)
                 </button>
-                <p className="text-xs text-gray-400 mt-2">Em produção, aprovação é automática via webhook Mercado Pago</p>
+                <p className="text-xs text-slate-400 mt-2">Em produção, aprovação é automática via webhook Mercado Pago</p>
               </div>
             )}
           </div>
@@ -1224,65 +1224,65 @@ function ReceiptPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b">
+    <div className="min-h-screen bg-slate-50">
+      <div className="bg-white border-b border-slate-200">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
-            <div><h1 className="font-bold">Comprovante</h1><p className="text-sm text-gray-500">{registration.confirmationCode}</p></div>
+            <button onClick={() => navigate(-1)} className="p-2 hover:bg-slate-100 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
+            <div><h1 className="font-bold text-slate-900">Comprovante</h1><p className="text-sm text-slate-500">{registration.confirmationCode}</p></div>
           </div>
-          <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-lg text-sm font-medium">
+          <button onClick={handleDownload} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg text-sm font-medium hover:from-emerald-700 hover:to-sky-700 transition-all">
             <Download className="w-4 h-4" /> Baixar
           </button>
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-6 text-center">
+        <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-slate-200">
+          <div className="bg-gradient-to-r from-emerald-600 to-sky-600 p-6 text-center">
             <CheckCircle className="w-16 h-16 text-white mx-auto mb-3" />
             <h2 className="text-xl font-bold text-white">Pagamento Confirmado!</h2>
           </div>
 
           <div className="p-6 space-y-6">
-            <div className="text-center pb-6 border-b">
-              <p className="text-xs text-gray-500 uppercase">Código de Confirmação</p>
-              <p className="text-3xl font-mono font-bold">{registration.confirmationCode}</p>
+            <div className="text-center pb-6 border-b border-slate-200">
+              <p className="text-xs text-slate-500 uppercase">Código de Confirmação</p>
+              <p className="text-3xl font-mono font-bold text-slate-900">{registration.confirmationCode}</p>
             </div>
 
             <div>
-              <h3 className="font-bold mb-3 flex items-center gap-2"><Trophy className="w-5 h-5 text-orange-500" /> Evento</h3>
-              <div className="bg-gray-50 rounded-lg p-4">
-                <p className="font-semibold">{race.name}</p>
-                <p className="text-sm text-gray-600">{format(parseISO(race.date), "dd/MM/yyyy")} às {race.time}</p>
-                <p className="text-sm text-gray-600">{race.location}, {race.city}/{race.state}</p>
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-slate-900"><Trophy className="w-5 h-5 text-emerald-600" /> Evento</h3>
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                <p className="font-semibold text-slate-900">{race.name}</p>
+                <p className="text-sm text-slate-600">{format(parseISO(race.date), "dd/MM/yyyy")} às {race.time}</p>
+                <p className="text-sm text-slate-600">{race.location}, {race.city}/{race.state}</p>
               </div>
             </div>
 
             <div>
-              <h3 className="font-bold mb-3 flex items-center gap-2"><User className="w-5 h-5 text-blue-500" /> Participante</h3>
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-slate-900"><User className="w-5 h-5 text-sky-600" /> Participante</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><p className="text-gray-500">Nome</p><p className="font-medium">{user.name}</p></div>
-                <div><p className="text-gray-500">CPF</p><p className="font-medium">{user.cpf}</p></div>
+                <div><p className="text-slate-500">Nome</p><p className="font-medium text-slate-900">{user.name}</p></div>
+                <div><p className="text-slate-500">CPF</p><p className="font-medium text-slate-900">{user.cpf}</p></div>
               </div>
             </div>
 
             <div>
-              <h3 className="font-bold mb-3 flex items-center gap-2"><CreditCard className="w-5 h-5 text-purple-500" /> Pagamento</h3>
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between text-sm"><span className="text-gray-500">Método</span><span className="font-medium">{payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)</span></div>
-                <div className="flex justify-between text-sm"><span className="text-gray-500">Inscrição</span><span>R$ {payment.amount.toFixed(2).replace('.', ',')}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-gray-500">Taxa</span><span>R$ {payment.serviceFee.toFixed(2).replace('.', ',')}</span></div>
-                <div className="flex justify-between pt-2 border-t"><span className="font-bold">Total</span><span className="font-bold text-xl text-green-600">R$ {payment.total.toFixed(2).replace('.', ',')}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-gray-500">Transação</span><span className="font-mono text-xs">{payment.transactionId}</span></div>
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-slate-900"><CreditCard className="w-5 h-5 text-emerald-600" /> Pagamento</h3>
+              <div className="bg-slate-50 rounded-lg p-4 space-y-2 border border-slate-200">
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Método</span><span className="font-medium text-slate-900">{payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Inscrição</span><span className="text-slate-900">R$ {payment.amount.toFixed(2).replace('.', ',')}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Taxa</span><span className="text-slate-900">R$ {payment.serviceFee.toFixed(2).replace('.', ',')}</span></div>
+                <div className="flex justify-between pt-2 border-t border-slate-200"><span className="font-bold text-slate-900">Total</span><span className="font-bold text-xl text-emerald-600">R$ {payment.total.toFixed(2).replace('.', ',')}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Transação</span><span className="font-mono text-xs text-slate-700">{payment.transactionId}</span></div>
               </div>
             </div>
           </div>
         </div>
 
         <div className="mt-6 flex gap-3">
-          <Link to="/minha-conta" className="flex-1 py-3 border rounded-xl text-center font-medium">Minhas Inscrições</Link>
-          <Link to="/" className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white rounded-xl text-center font-medium">Ver Mais Eventos</Link>
+          <Link to="/minha-conta" className="flex-1 py-3 border border-slate-300 rounded-xl text-center font-medium text-slate-700 hover:bg-slate-50 transition-colors">Minhas Inscrições</Link>
+          <Link to="/" className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-xl text-center font-medium hover:from-emerald-700 hover:to-sky-700 transition-all">Ver Mais Eventos</Link>
         </div>
       </div>
     </div>
