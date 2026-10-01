@@ -4,7 +4,6 @@ import { DataProvider, useData } from './contexts/DataContext';
 import { useState, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
 import DiagnosticPage from './pages/DiagnosticPage';
-import './lib/test-supabase';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { 
@@ -165,19 +164,23 @@ function LoginPage() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({ name: '', email: '', password: '', cpf: '', phone: '' });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLogin) {
-      const result = login(formData.email, formData.password);
+      const result = await login(formData.email, formData.password);
       if (result.success) {
-        const users = JSON.parse(localStorage.getItem('rb_users') || '[]');
-        const user = users.find((u: any) => u.email === formData.email);
-        navigate(user?.role === 'admin' ? '/admin' : '/minha-conta');
+        // Get user role from Supabase or localStorage
+        const currentUser = JSON.parse(localStorage.getItem('rb_session') || 'null');
+        if (currentUser) {
+          navigate(currentUser.role === 'admin' ? '/admin' : '/minha-conta');
+        } else {
+          navigate('/minha-conta');
+        }
       } else {
         setError(result.message);
       }
     } else {
-      const result = register({ ...formData, role: 'participant' });
+      const result = await register({ ...formData, role: 'participant' });
       if (result.success) navigate('/minha-conta');
       else setError(result.message);
     }

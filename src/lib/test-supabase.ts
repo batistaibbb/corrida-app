@@ -93,8 +93,7 @@ export async function testSupabaseConnection() {
   }
 }
 
-// Executar teste automaticamente no console do navegador
+// Disponibilizar função no window para uso no console
 if (typeof window !== 'undefined') {
   (window as any).testSupabase = testSupabaseConnection;
-  console.log('💡 Digite testSupabase() no console para testar a conexão');
 }
