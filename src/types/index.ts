@@ -21,7 +21,7 @@ export interface Race {
   state: string;
   image: string;
   description: string;
-  distances: { km: number; price: number }[];
+  distances: RaceDistance[];
   organizer: string;
   organizerId: string;
   participants: number;
@@ -44,6 +44,18 @@ export interface Race {
   kits?: RaceKit[];
   // Tamanhos de camisa disponíveis
   shirtSizes?: string[];
+  // PDF com regulamento/detalhes
+  regulationPdf?: string;
+  // Mapa do percurso (URL da imagem)
+  routeMap?: string;
+}
+
+export interface RaceDistance {
+  km: number;
+  price: number;
+  name?: string; // Ex: "Corrida", "Caminhada"
+  description?: string;
+  kitId?: string; // Vincular a um kit específico (opcional)
 }
 
 export interface RaceKit {
@@ -54,6 +66,7 @@ export interface RaceKit {
   image: string;
   includes: string[];
   distance?: number; // km (0 para caminhada)
+  distanceIds?: string[]; // IDs das distâncias vinculadas (opcional)
 }
 
 export type PaymentMethod = 'pix' | 'credit_card' | 'debit_card';
@@ -78,6 +91,7 @@ export interface Registration {
   userId: string;
   raceId: string;
   distance: number;
+  distanceId?: string; // ID da distância selecionada
   tshirtSize: string;
   kitId?: string; // ID do kit selecionado
   kitName?: string; // Nome do kit selecionado
