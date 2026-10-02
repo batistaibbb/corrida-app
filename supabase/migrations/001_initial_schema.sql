@@ -59,7 +59,10 @@ CREATE TABLE public.races (
   max_participants INTEGER NOT NULL DEFAULT 1000,
   category TEXT NOT NULL,
   sport TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'open', 'closed', 'finished')),
+  -- Status de publicação (visibilidade)
+  published BOOLEAN DEFAULT FALSE,
+  -- Status de inscrição (temporal)
+  registration_status TEXT NOT NULL DEFAULT 'upcoming' CHECK (registration_status IN ('upcoming', 'closed', 'finished')),
   includes JSONB DEFAULT '[]'::jsonb,
   rules JSONB DEFAULT '[]'::jsonb,
   rating DECIMAL(2,1) DEFAULT 0,
@@ -74,10 +77,10 @@ CREATE TABLE public.races (
 
 ALTER TABLE public.races ENABLE ROW LEVEL SECURITY;
 
--- Anyone can view published/open/closed/finished races
-CREATE POLICY "Public can view active races"
+-- Anyone can view published races
+CREATE POLICY "Public can view published races"
   ON public.races FOR SELECT
-  USING (status IN ('published', 'open', 'closed', 'finished'));
+  USING (published = true);
 
 -- Admins can view all races (including drafts)
 CREATE POLICY "Admins can view all races"
@@ -310,7 +313,8 @@ CREATE TRIGGER on_review_create
 -- ============================================
 -- 7. INDEXES PARA PERFORMANCE
 -- ============================================
-CREATE INDEX idx_races_status ON public.races(status);
+CREATE INDEX idx_races_published ON public.races(published);
+CREATE INDEX idx_races_registration_status ON public.races(registration_status);
 CREATE INDEX idx_races_date ON public.races(date);
 CREATE INDEX idx_races_city ON public.races(city);
 CREATE INDEX idx_registrations_user_id ON public.registrations(user_id);

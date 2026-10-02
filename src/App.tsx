@@ -7,9 +7,10 @@ import DiagnosticPage from './pages/DiagnosticPage';
 import TestSupabase from './pages/TestSupabase';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatusColor, canRegister } from './utils/raceStatus';
 import { 
   Trophy, Calendar, MapPin, Users, Star, Search, Filter, 
-  User, Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft,
+  User, Mail, Lock, Unlock, Eye, EyeOff, ArrowRight, ArrowLeft,
   LogOut, LayoutDashboard, CreditCard, FileText, CheckCircle,
   QrCode, Copy, Check, Shield, Download, Plus, Edit, Trash2,
   DollarSign, AlertCircle, Phone, Home as HomeIcon, Heart, Share2
@@ -110,8 +111,8 @@ function HomePage() {
   ];
 
   const filtered = races.filter(r => {
-    // Não mostrar eventos em rascunho ou finalizados para o público
-    const isVisible = r.status !== 'draft' && r.status !== 'finished';
+    // Mostrar apenas eventos publicados
+    const isVisible = r.published;
     const matchesSearch = isVisible && 
       (r.name.toLowerCase().includes(search.toLowerCase()) || r.city.toLowerCase().includes(search.toLowerCase()));
     const matchesCategory = selectedCategory === 'all' || r.sport === selectedCategory;
@@ -122,7 +123,7 @@ function HomePage() {
     return matchesSearch && matchesCategory && matchesDate;
   });
 
-  const featuredRaces = races.filter(r => r.featured && r.status === 'open').slice(0, 3);
+  const featuredRaces = races.filter(r => r.featured && r.published && canRegister(r)).slice(0, 3);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -326,15 +327,8 @@ function HomePage() {
                   
                   {/* Status Badge */}
                   <div className="absolute top-4 right-4">
-                    <span className={`px-3 py-1.5 text-xs font-semibold rounded ${
-                      race.status === 'open' ? 'bg-emerald-500 text-white' :
-                      race.status === 'closed' ? 'bg-slate-500 text-white' :
-                      race.status === 'finished' ? 'bg-slate-700 text-white' :
-                      'bg-slate-400 text-white'
-                    }`}>
-                      {race.status === 'open' ? 'Inscrições Abertas' :
-                       race.status === 'closed' ? 'Inscrições Encerradas' :
-                       race.status === 'finished' ? 'Evento Encerrado' : 'Em breve'}
+                    <span className={`px-3 py-1.5 text-xs font-semibold rounded ${getRegistrationStatusColor(getRegistrationStatus(race))}`}>
+                      {getRegistrationStatusText(getRegistrationStatus(race))}
                     </span>
                   </div>
 
@@ -648,13 +642,8 @@ function RaceDetailsPage() {
                   {race.discount}% OFF
                 </span>
               )}
-              <span className={`px-4 py-1.5 text-sm font-semibold rounded ${
-                race.status === 'open' ? 'bg-emerald-500 text-white' :
-                race.status === 'closed' ? 'bg-slate-500 text-white' :
-                'bg-slate-700 text-white'
-              }`}>
-                {race.status === 'open' ? 'Inscrições Abertas' :
-                 race.status === 'closed' ? 'Inscrições Encerradas' : 'Evento Encerrado'}
+              <span className={`px-4 py-1.5 text-sm font-semibold rounded ${getRegistrationStatusColor(getRegistrationStatus(race))}`}>
+                {getRegistrationStatusText(getRegistrationStatus(race))}
               </span>
             </div>
             <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">{race.name}</h1>
@@ -863,14 +852,14 @@ function RaceDetailsPage() {
               {/* Register Button */}
               <button
                 onClick={handleRegister}
-                disabled={!selectedDistance || race.status !== 'open'}
+                disabled={!selectedDistance || !canRegister(race)}
                 className={`w-full py-4 rounded-lg font-semibold text-lg transition-all ${
-                  selectedDistance && race.status === 'open'
+                  selectedDistance && canRegister(race)
                     ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-md'
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
               >
-                {race.status === 'open' ? 'Realizar Inscrição' : 'Inscrições Encerradas'}
+                {canRegister(race) ? 'Realizar Inscrição' : getRegistrationStatusText(getRegistrationStatus(race))}
               </button>
 
               {/* Trust Badges */}
@@ -1362,36 +1351,40 @@ function AdminDashboard() {
                     <tr key={race.id}>
                       <td className="px-6 py-4"><div className="flex items-center gap-3"><img src={race.image} alt="" className="w-12 h-12 rounded-lg object-cover" /><div><p className="font-medium text-sm">{race.name}</p><p className="text-xs text-gray-500">{race.city}</p></div></div></td>
                       <td className="px-6 py-4 text-sm">{format(parseISO(race.date), "dd/MM/yyyy")}</td>
-                      <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${race.status === 'open' ? 'bg-green-100 text-green-700' : race.status === 'closed' ? 'bg-orange-100 text-orange-700' : race.status === 'finished' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>{race.status === 'open' ? 'Aberto' : race.status === 'closed' ? 'Encerrado' : race.status === 'finished' ? 'Finalizado' : 'Rascunho'}</span></td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1">
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${race.published ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                            {race.published ? 'Publicado' : 'Rascunho'}
+                          </span>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${getRegistrationStatusColor(getRegistrationStatus(race))}`}>
+                            {getRegistrationStatusText(getRegistrationStatus(race))}
+                          </span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={() => { setEditingRace(race); setShowForm(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Editar">
                             <Edit className="w-4 h-4" />
                           </button>
-                          {race.status !== 'draft' && (
-                            <button 
-                              onClick={() => { 
-                                if (confirm('Despublicar este evento? Ele não aparecerá mais para o público.')) {
-                                  updateRace(race.id, { status: 'draft' });
-                                }
-                              }} 
-                              className="p-1.5 text-orange-600 hover:bg-orange-50 rounded" 
-                              title="Despublicar"
-                            >
-                              <EyeOff className="w-4 h-4" />
-                            </button>
-                          )}
-                          {race.status === 'draft' && (
-                            <button 
-                              onClick={() => { 
-                                updateRace(race.id, { status: 'open' });
-                              }} 
-                              className="p-1.5 text-green-600 hover:bg-green-50 rounded" 
-                              title="Publicar"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                          )}
+                          <button 
+                            onClick={() => { 
+                              updateRace(race.id, { published: !race.published });
+                            }} 
+                            className={`p-1.5 rounded ${race.published ? 'text-orange-600 hover:bg-orange-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
+                            title={race.published ? 'Despublicar' : 'Publicar'}
+                          >
+                            {race.published ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                          <button 
+                            onClick={() => { 
+                              const newStatus = race.registrationStatus === 'upcoming' ? 'closed' : 'upcoming';
+                              updateRace(race.id, { registrationStatus: newStatus });
+                            }} 
+                            className={`p-1.5 rounded ${race.registrationStatus === 'upcoming' ? 'text-slate-600 hover:bg-slate-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
+                            title={race.registrationStatus === 'upcoming' ? 'Encerrar inscrições' : 'Reabrir inscrições'}
+                          >
+                            {race.registrationStatus === 'upcoming' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+                          </button>
                           <button onClick={() => { if (confirm('Excluir permanentemente?')) deleteRace(race.id); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Excluir">
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -1500,7 +1493,8 @@ function RaceFormModal({ race, onSave, onClose, organizerId, organizerName }: { 
     maxParticipants: race?.maxParticipants || 1000,
     category: race?.category || 'Maratona',
     sport: race?.sport || 'corrida',
-    status: race?.status || 'draft',
+    published: race?.published ?? false,
+    registrationStatus: race?.registrationStatus || 'upcoming',
     includes: race?.includes || [''],
     rules: race?.rules || [''],
     featured: race?.featured || false,
@@ -1544,12 +1538,20 @@ function RaceFormModal({ race, onSave, onClose, organizerId, organizerName }: { 
             </div>
             <div className="grid grid-cols-2 gap-4">
               <input type="number" value={formData.maxParticipants} onChange={(e) => setFormData({...formData, maxParticipants: parseInt(e.target.value)})} placeholder="Vagas" className="px-4 py-2.5 border rounded-lg" required />
-              <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value as any})} className="px-4 py-2.5 border rounded-lg">
-                <option value="draft">Rascunho</option>
-                <option value="published">Publicado</option>
-                <option value="open">Inscrições Abertas</option>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Publicação</label>
+                <select value={formData.published ? 'published' : 'draft'} onChange={(e) => setFormData({...formData, published: e.target.value === 'published'})} className="w-full px-4 py-2.5 border rounded-lg">
+                  <option value="draft">Rascunho (não publicado)</option>
+                  <option value="published">Publicado</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Status das Inscrições</label>
+              <select value={formData.registrationStatus} onChange={(e) => setFormData({...formData, registrationStatus: e.target.value as any})} className="w-full px-4 py-2.5 border rounded-lg">
+                <option value="upcoming">Inscrições Abertas</option>
                 <option value="closed">Inscrições Encerradas</option>
-                <option value="finished">Evento Encerrado</option>
+                <option value="finished">Evento Finalizado</option>
               </select>
             </div>
             <div className="flex justify-end gap-3 pt-4 border-t">
