@@ -1,4 +1,4 @@
-# RunBrasil - Plataforma de Inscrições para Corridas de Rua
+# Smart Brasil Ticket - Plataforma de Inscrições para Eventos Esportivos
 
 [![Deploy to Vercel](https://vercel.com/button)](https://vercel.com/new)
 
@@ -53,7 +53,7 @@ Plataforma completa e funcional para inscrição em eventos esportivos, utilizan
 ## 🔐 Credenciais de Demonstração
 
 ### Admin
-- **Email:** admin@runbrasil.com.br
+- **Email:** admin@smartbrasilticket.com.br
 - **Senha:** admin123
 - **Acesso:** `/admin`
 
@@ -203,7 +203,7 @@ npm run preview
 ## 📞 Suporte
 
 Para dúvidas ou suporte:
-- **Email:** contato@runbrasil.com.br
+- **Email:** contato@smartbrasilticket.com.br
 - **Telefone:** (11) 4002-8922
 
 ---
@@ -240,7 +240,7 @@ Para dúvidas ou suporte:
 ## 📁 Estrutura do Projeto
 
 ```
-runbrasil/
+smart-brasil-ticket/
 ├── src/                    # Código frontend
 │   ├── App.tsx            # Componente principal
 │   ├── lib/

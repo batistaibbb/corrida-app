@@ -318,7 +318,7 @@ INSERT INTO races (name, date, time, location, city, state, image_url, descripti
    ```
 
 4. Faça login como admin:
-   - Email: `admin@runbrasil.com.br`
+   - Email: `admin@smartbrasilticket.com.br`
    - Senha: `1Corintios10.31`
 
 5. Crie um novo evento
