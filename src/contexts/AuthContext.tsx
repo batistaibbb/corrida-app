@@ -142,19 +142,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (error) {
           console.error('❌ Erro Supabase:', error);
+          // Mensagens mais amigáveis
+          if (error.message.includes('Invalid login credentials')) {
+            return { success: false, message: 'E-mail ou senha incorretos. Verifique seus dados.' };
+          }
+          if (error.message.includes('Email not confirmed')) {
+            return { success: false, message: 'Por favor, confirme seu email antes de fazer login. Verifique sua caixa de entrada.' };
+          }
           return { success: false, message: error.message };
         }
 
         if (data.user) {
           console.log('✅ Login Supabase sucesso:', data.user.email);
+          
+          // Tentar carregar o perfil
           await loadUserProfile(data.user.id);
+          
+          // Verificar se o usuário foi carregado
+          if (!user) {
+            console.warn('⚠️ Perfil não encontrado, criando perfil básico...');
+            // Se o perfil não existir, criar um básico
+            const { error: profileError } = await supabase
+              .from('profiles')
+              .insert({
+                id: data.user.id,
+                email: data.user.email,
+                name: data.user.user_metadata?.name || 'Usuário',
+                role: data.user.user_metadata?.role || 'participant',
+              });
+            
+            if (!profileError) {
+              await loadUserProfile(data.user.id);
+            } else {
+              console.error('Erro ao criar perfil básico:', profileError);
+            }
+          }
+          
           return { success: true, message: 'Login realizado com sucesso!' };
         }
 
-        return { success: false, message: 'Erro ao fazer login' };
+        return { success: false, message: 'Erro ao fazer login. Tente novamente.' };
       } catch (err) {
         console.error('❌ Erro no login Supabase:', err);
-        return { success: false, message: 'Erro ao fazer login' };
+        return { success: false, message: 'Erro ao fazer login. Verifique sua conexão.' };
       }
     }
 
@@ -185,10 +215,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         if (error) {
+          console.error('Erro no registro:', error);
           return { success: false, message: error.message };
         }
 
         if (authData.user) {
+          // Verificar se o email precisa de confirmação
+          if (!authData.user.email_confirmed_at) {
+            return { 
+              success: false, 
+              message: 'Por favor, confirme seu email antes de fazer login. Verifique sua caixa de entrada.' 
+            };
+          }
+
+          // Criar perfil no banco de dados
           const { error: profileError } = await supabase
             .from('profiles')
             .insert({
@@ -201,17 +241,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
 
           if (profileError) {
-            console.error('Error creating profile:', profileError);
+            console.error('Erro ao criar perfil:', profileError);
+            // Se falhar ao criar perfil, tentar deletar o usuário auth
+            await supabase.auth.admin.deleteUser(authData.user.id);
+            return { 
+              success: false, 
+              message: 'Erro ao criar perfil. Tente novamente.' 
+            };
           }
 
+          // Carregar perfil do usuário
           await loadUserProfile(authData.user.id);
           return { success: true, message: 'Conta criada com sucesso!' };
         }
 
-        return { success: false, message: 'Erro ao criar conta' };
+        return { success: false, message: 'Erro ao criar conta. Tente novamente.' };
       } catch (err) {
-        console.error('Error in register:', err);
-        return { success: false, message: 'Erro ao criar conta' };
+        console.error('Erro no registro:', err);
+        return { success: false, message: 'Erro ao criar conta. Tente novamente.' };
       }
     }
 
