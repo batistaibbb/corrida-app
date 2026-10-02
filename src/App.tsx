@@ -5,6 +5,7 @@ import { useState, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
 import DiagnosticPage from './pages/DiagnosticPage';
 import TestSupabase from './pages/TestSupabase';
+import EventForm from './components/EventForm';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatusColor, canRegister } from './utils/raceStatus';
@@ -1650,7 +1651,7 @@ function AdminDashboard() {
       </main>
 
       {showForm && user && (
-        <RaceFormModal
+        <EventForm
           race={editingRace}
           organizerId={user.id}
           organizerName={user.name}
@@ -1671,163 +1672,6 @@ function AdminDashboard() {
           onClose={() => { setShowForm(false); setEditingRace(null); }}
         />
       )}
-    </div>
-  );
-}
-
-function RaceFormModal({ race, onSave, onClose, organizerId, organizerName }: { race?: Race | null; onSave: (data: any) => void; onClose: () => void; organizerId: string; organizerName: string }) {
-  const [formData, setFormData] = useState({
-    name: race?.name || '',
-    date: race?.date || '',
-    time: race?.time || '',
-    location: race?.location || '',
-    city: race?.city || '',
-    state: race?.state || '',
-    image: race?.image || '',
-    description: race?.description || '',
-    organizer: organizerName,
-    organizerId,
-    maxParticipants: race?.maxParticipants || 1000,
-    category: race?.category || 'Maratona',
-    sport: race?.sport || 'corrida',
-    published: race?.published ?? false,
-    registrationStatus: race?.registrationStatus || 'upcoming',
-    includes: race?.includes || [''],
-    rules: race?.rules || [''],
-    featured: race?.featured || false,
-    discount: race?.discount || 0,
-    tags: race?.tags || [''],
-    distances: race?.distances || [{ km: 5, price: 100 }],
-    kits: race?.kits || [],
-    shirtSizes: race?.shirtSizes || ['PP', 'P', 'M', 'G', 'GG', 'XGG'],
-  });
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSave({
-      ...formData,
-      includes: formData.includes.filter(i => i.trim()),
-      rules: formData.rules.filter(r => r.trim()),
-      tags: formData.tags.filter(t => t.trim()),
-      distances: formData.distances.filter(d => d.km > 0 && d.price > 0),
-      kits: formData.kits,
-      shirtSizes: formData.shirtSizes,
-    });
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative min-h-screen flex items-start justify-center p-4 pt-8">
-        <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl">
-          <div className="sticky top-0 bg-white border-b px-6 py-4 rounded-t-2xl flex items-center justify-between">
-            <h2 className="text-xl font-bold">{race ? 'Editar Evento' : 'Novo Evento'}</h2>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
-          </div>
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            <input type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="Nome do Evento" className="w-full px-4 py-2.5 border rounded-lg" required />
-            <textarea value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="Descrição" rows={3} className="w-full px-4 py-2.5 border rounded-lg" required />
-            <input type="url" value={formData.image} onChange={(e) => setFormData({...formData, image: e.target.value})} placeholder="URL da Imagem" className="w-full px-4 py-2.5 border rounded-lg" required />
-            <div className="grid grid-cols-2 gap-4">
-              <input type="date" value={formData.date} onChange={(e) => setFormData({...formData, date: e.target.value})} className="px-4 py-2.5 border rounded-lg" required />
-              <input type="time" value={formData.time} onChange={(e) => setFormData({...formData, time: e.target.value})} className="px-4 py-2.5 border rounded-lg" required />
-            </div>
-            <input type="text" value={formData.location} onChange={(e) => setFormData({...formData, location: e.target.value})} placeholder="Local" className="w-full px-4 py-2.5 border rounded-lg" required />
-            <div className="grid grid-cols-2 gap-4">
-              <input type="text" value={formData.city} onChange={(e) => setFormData({...formData, city: e.target.value})} placeholder="Cidade" className="px-4 py-2.5 border rounded-lg" required />
-              <input type="text" value={formData.state} onChange={(e) => setFormData({...formData, state: e.target.value})} placeholder="UF" maxLength={2} className="px-4 py-2.5 border rounded-lg" required />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <input type="number" value={formData.maxParticipants} onChange={(e) => setFormData({...formData, maxParticipants: parseInt(e.target.value)})} placeholder="Vagas" className="px-4 py-2.5 border rounded-lg" required />
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Publicação</label>
-                <select value={formData.published ? 'published' : 'draft'} onChange={(e) => setFormData({...formData, published: e.target.value === 'published'})} className="w-full px-4 py-2.5 border rounded-lg">
-                  <option value="draft">Rascunho (não publicado)</option>
-                  <option value="published">Publicado</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Status das Inscrições</label>
-              <select value={formData.registrationStatus} onChange={(e) => setFormData({...formData, registrationStatus: e.target.value as any})} className="w-full px-4 py-2.5 border rounded-lg">
-                <option value="upcoming">Inscrições Abertas</option>
-                <option value="closed">Inscrições Encerradas</option>
-                <option value="finished">Evento Finalizado</option>
-              </select>
-            </div>
-
-            {/* Kits */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Kits de Inscrição</label>
-              <div className="space-y-3">
-                {formData.kits.map((kit, index) => (
-                  <div key={index} className="p-4 border rounded-lg space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold text-sm">Kit {index + 1}</span>
-                      <button type="button" onClick={() => setFormData({...formData, kits: formData.kits.filter((_, i) => i !== index)})} className="text-red-600 hover:bg-red-50 p-1 rounded">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <input type="text" value={kit.name} onChange={(e) => {
-                      const newKits = [...formData.kits];
-                      newKits[index] = {...kit, name: e.target.value};
-                      setFormData({...formData, kits: newKits});
-                    }} placeholder="Nome do Kit" className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    <input type="text" value={kit.description} onChange={(e) => {
-                      const newKits = [...formData.kits];
-                      newKits[index] = {...kit, description: e.target.value};
-                      setFormData({...formData, kits: newKits});
-                    }} placeholder="Descrição" className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    <input type="url" value={kit.image} onChange={(e) => {
-                      const newKits = [...formData.kits];
-                      newKits[index] = {...kit, image: e.target.value};
-                      setFormData({...formData, kits: newKits});
-                    }} placeholder="URL da Imagem do Kit" className="w-full px-3 py-2 border rounded-lg text-sm" />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="number" value={kit.price} onChange={(e) => {
-                        const newKits = [...formData.kits];
-                        newKits[index] = {...kit, price: parseFloat(e.target.value)};
-                        setFormData({...formData, kits: newKits});
-                      }} placeholder="Preço" className="px-3 py-2 border rounded-lg text-sm" step="0.01" />
-                      <input type="number" value={kit.distance || 0} onChange={(e) => {
-                        const newKits = [...formData.kits];
-                        newKits[index] = {...kit, distance: parseFloat(e.target.value)};
-                        setFormData({...formData, kits: newKits});
-                      }} placeholder="Distância (km)" className="px-3 py-2 border rounded-lg text-sm" step="0.1" />
-                    </div>
-                    <input type="text" value={kit.includes.join(', ')} onChange={(e) => {
-                      const newKits = [...formData.kits];
-                      newKits[index] = {...kit, includes: e.target.value.split(',').map(s => s.trim())};
-                      setFormData({...formData, kits: newKits});
-                    }} placeholder="Incluso (separado por vírgula)" className="w-full px-3 py-2 border rounded-lg text-sm" />
-                  </div>
-                ))}
-                <button type="button" onClick={() => setFormData({...formData, kits: [...formData.kits, { id: `kit-${Date.now()}`, name: '', description: '', price: 0, image: '', includes: [], distance: 0 }]})} className="w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-emerald-500 hover:text-emerald-600">
-                  + Adicionar Kit
-                </button>
-              </div>
-            </div>
-
-            {/* Tamanhos de Camisa */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-2">Tamanhos de Camisa Disponíveis</label>
-              <input 
-                type="text" 
-                value={formData.shirtSizes.join(', ')} 
-                onChange={(e) => setFormData({...formData, shirtSizes: e.target.value.split(',').map(s => s.trim()).filter(s => s)})} 
-                placeholder="PP, P, M, G, GG, XGG" 
-                className="w-full px-4 py-2.5 border rounded-lg" 
-              />
-              <p className="text-xs text-slate-500 mt-1">Separe os tamanhos por vírgula</p>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t">
-              <button type="button" onClick={onClose} className="px-6 py-2.5 border rounded-lg">Cancelar</button>
-              <button type="submit" className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-medium rounded-lg">{race ? 'Salvar' : 'Criar'}</button>
-            </div>
-          </form>
-        </div>
-      </div>
     </div>
   );
 }
