@@ -110,7 +110,9 @@ function HomePage() {
   ];
 
   const filtered = races.filter(r => {
-    const matchesSearch = r.status !== 'draft' && 
+    // Não mostrar eventos em rascunho ou finalizados para o público
+    const isVisible = r.status !== 'draft' && r.status !== 'finished';
+    const matchesSearch = isVisible && 
       (r.name.toLowerCase().includes(search.toLowerCase()) || r.city.toLowerCase().includes(search.toLowerCase()));
     const matchesCategory = selectedCategory === 'all' || r.sport === selectedCategory;
     const matchesDate = selectedDate === 'all' || 
@@ -1361,7 +1363,40 @@ function AdminDashboard() {
                       <td className="px-6 py-4"><div className="flex items-center gap-3"><img src={race.image} alt="" className="w-12 h-12 rounded-lg object-cover" /><div><p className="font-medium text-sm">{race.name}</p><p className="text-xs text-gray-500">{race.city}</p></div></div></td>
                       <td className="px-6 py-4 text-sm">{format(parseISO(race.date), "dd/MM/yyyy")}</td>
                       <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${race.status === 'open' ? 'bg-green-100 text-green-700' : race.status === 'closed' ? 'bg-orange-100 text-orange-700' : race.status === 'finished' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>{race.status === 'open' ? 'Aberto' : race.status === 'closed' ? 'Encerrado' : race.status === 'finished' ? 'Finalizado' : 'Rascunho'}</span></td>
-                      <td className="px-6 py-4 text-right"><div className="flex items-center justify-end gap-2"><button onClick={() => { setEditingRace(race); setShowForm(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Edit className="w-4 h-4" /></button><button onClick={() => { if (confirm('Excluir?')) deleteRace(race.id); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded"><Trash2 className="w-4 h-4" /></button></div></td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => { setEditingRace(race); setShowForm(true); }} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded" title="Editar">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          {race.status !== 'draft' && (
+                            <button 
+                              onClick={() => { 
+                                if (confirm('Despublicar este evento? Ele não aparecerá mais para o público.')) {
+                                  updateRace(race.id, { status: 'draft' });
+                                }
+                              }} 
+                              className="p-1.5 text-orange-600 hover:bg-orange-50 rounded" 
+                              title="Despublicar"
+                            >
+                              <EyeOff className="w-4 h-4" />
+                            </button>
+                          )}
+                          {race.status === 'draft' && (
+                            <button 
+                              onClick={() => { 
+                                updateRace(race.id, { status: 'open' });
+                              }} 
+                              className="p-1.5 text-green-600 hover:bg-green-50 rounded" 
+                              title="Publicar"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          )}
+                          <button onClick={() => { if (confirm('Excluir permanentemente?')) deleteRace(race.id); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Excluir">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
