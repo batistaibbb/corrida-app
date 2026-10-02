@@ -918,17 +918,22 @@ function RegistrationPage() {
     setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value }));
   };
 
-  const handleSubmit = () => {
-    const regId = addRegistration({
-      userId: user.id,
-      raceId: race.id,
-      distance,
-      tshirtSize: formData.tshirtSize,
-      status: 'pending_payment',
-      emergencyName: formData.emergencyName,
-      emergencyPhone: formData.emergencyPhone,
-    });
-    navigate(`/pagamento/${regId}`);
+  const handleSubmit = async () => {
+    try {
+      const regId = await addRegistration({
+        userId: user.id,
+        raceId: race.id,
+        distance,
+        tshirtSize: formData.tshirtSize,
+        status: 'pending_payment',
+        emergencyName: formData.emergencyName,
+        emergencyPhone: formData.emergencyPhone,
+      });
+      navigate(`/pagamento/${regId}`);
+    } catch (error) {
+      console.error('Erro ao criar inscrição:', error);
+      alert('Erro ao criar inscrição. Tente novamente.');
+    }
   };
 
   return (
@@ -1382,8 +1387,13 @@ function AdminDashboard() {
                             <Edit className="w-4 h-4" />
                           </button>
                           <button 
-                            onClick={() => { 
-                              updateRace(race.id, { published: !race.published });
+                            onClick={async () => { 
+                              try {
+                                await updateRace(race.id, { published: !race.published });
+                              } catch (error) {
+                                console.error('Erro ao atualizar publicação:', error);
+                                alert('Erro ao atualizar status. Tente novamente.');
+                              }
                             }} 
                             className={`p-1.5 rounded ${race.published ? 'text-orange-600 hover:bg-orange-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
                             title={race.published ? 'Despublicar' : 'Publicar'}
@@ -1391,16 +1401,28 @@ function AdminDashboard() {
                             {race.published ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                           </button>
                           <button 
-                            onClick={() => { 
-                              const newStatus = race.registrationStatus === 'upcoming' ? 'closed' : 'upcoming';
-                              updateRace(race.id, { registrationStatus: newStatus });
+                            onClick={async () => { 
+                              try {
+                                const newStatus = race.registrationStatus === 'upcoming' ? 'closed' : 'upcoming';
+                                await updateRace(race.id, { registrationStatus: newStatus });
+                              } catch (error) {
+                                console.error('Erro ao atualizar inscrições:', error);
+                                alert('Erro ao atualizar status. Tente novamente.');
+                              }
                             }} 
                             className={`p-1.5 rounded ${race.registrationStatus === 'upcoming' ? 'text-slate-600 hover:bg-slate-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
                             title={race.registrationStatus === 'upcoming' ? 'Encerrar inscrições' : 'Reabrir inscrições'}
                           >
                             {race.registrationStatus === 'upcoming' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                           </button>
-                          <button onClick={() => { if (confirm('Excluir permanentemente?')) deleteRace(race.id); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Excluir">
+                          <button onClick={async () => { if (confirm('Excluir permanentemente?')) {
+                            try {
+                              await deleteRace(race.id);
+                            } catch (error) {
+                              console.error('Erro ao excluir:', error);
+                              alert('Erro ao excluir evento. Tente novamente.');
+                            }
+                          }}} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Excluir">
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -1465,7 +1487,14 @@ function AdminDashboard() {
                       <td className="px-6 py-4 text-sm capitalize">{payment.method === 'pix' ? 'PIX' : 'Cartão'}</td>
                       <td className="px-6 py-4 text-sm font-semibold">R$ {payment.total.toFixed(2).replace('.', ',')}</td>
                       <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${payment.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{payment.status === 'approved' ? 'Aprovado' : 'Pendente'}</span></td>
-                      <td className="px-6 py-4 text-right">{payment.status === 'pending' && <button onClick={() => approvePayment(payment.id)} className="p-1.5 text-green-600 hover:bg-green-50 rounded"><CheckCircle className="w-4 h-4" /></button>}</td>
+                      <td className="px-6 py-4 text-right">{payment.status === 'pending' && <button onClick={async () => {
+                        try {
+                          await approvePayment(payment.id);
+                        } catch (error) {
+                          console.error('Erro ao aprovar pagamento:', error);
+                          alert('Erro ao aprovar pagamento. Tente novamente.');
+                        }
+                      }} className="p-1.5 text-green-600 hover:bg-green-50 rounded"><CheckCircle className="w-4 h-4" /></button>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1480,11 +1509,19 @@ function AdminDashboard() {
           race={editingRace}
           organizerId={user.id}
           organizerName={user.name}
-          onSave={(data) => {
-            if (editingRace) updateRace(editingRace.id, data);
-            else addRace(data);
-            setShowForm(false);
-            setEditingRace(null);
+          onSave={async (data) => {
+            try {
+              if (editingRace) {
+                await updateRace(editingRace.id, data);
+              } else {
+                await addRace(data);
+              }
+              setShowForm(false);
+              setEditingRace(null);
+            } catch (error) {
+              console.error('Erro ao salvar evento:', error);
+              alert('Erro ao salvar evento. Tente novamente.');
+            }
           }}
           onClose={() => { setShowForm(false); setEditingRace(null); }}
         />
