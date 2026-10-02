@@ -155,11 +155,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (data.user) {
           console.log('✅ Login Supabase sucesso:', data.user.email);
           
-          // Tentar carregar o perfil
-          await loadUserProfile(data.user.id);
+          // Verificar se o perfil existe
+          const { data: existingProfile, error: checkError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .maybeSingle();
           
-          // Verificar se o usuário foi carregado
-          if (!user) {
+          if (checkError && checkError.code !== 'PGRST116') {
+            console.error('Erro ao verificar perfil:', checkError);
+          }
+          
+          if (!existingProfile) {
             console.warn('⚠️ Perfil não encontrado, criando perfil básico...');
             // Se o perfil não existir, criar um básico
             const { error: profileError } = await supabase
@@ -171,13 +178,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 role: data.user.user_metadata?.role || 'participant',
               });
             
-            if (!profileError) {
-              await loadUserProfile(data.user.id);
-            } else {
+            if (profileError && profileError.code !== '23505') {
               console.error('Erro ao criar perfil básico:', profileError);
+            } else if (profileError?.code === '23505') {
+              console.log('ℹ️ Perfil já existe (ignorado)');
             }
           }
           
+          await loadUserProfile(data.user.id);
           return { success: true, message: 'Login realizado com sucesso!' };
         }
 
