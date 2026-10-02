@@ -1043,10 +1043,10 @@ function PaymentPage() {
 
   const pixCode = `00020126580014br.gov.bcb.pix0136${registration.confirmationCode}520400005303986540${total.toFixed(2)}5802BR5925RUNBRASIL6009SAO PAULO6304ABCD`;
 
-  const handlePixPayment = () => {
+  const handlePixPayment = async () => {
     setProcessing(true);
-    setTimeout(() => {
-      const id = addPayment({
+    setTimeout(async () => {
+      const id = await addPayment({
         registrationId: registration.id,
         method: 'pix',
         amount: distancePrice,
@@ -1062,15 +1062,15 @@ function PaymentPage() {
     }, 1500);
   };
 
-  const handleCardPayment = () => {
+  const handleCardPayment = async () => {
     if (!cardData.number || !cardData.name || !cardData.expiry || !cardData.cvv) {
       alert('Preencha todos os dados do cartão');
       return;
     }
     setProcessing(true);
-    setTimeout(() => {
+    setTimeout(async () => {
       const method = cardData.installments === '1' ? 'debit_card' : 'credit_card';
-      const id = addPayment({
+      const id = await addPayment({
         registrationId: registration.id,
         method,
         amount: distancePrice,
@@ -1080,7 +1080,7 @@ function PaymentPage() {
         transactionId: `MP-CARD-${Date.now()}`,
         paidAt: new Date().toISOString(),
       });
-      updateRegistration(registration.id, { status: 'confirmed', paymentId: id });
+      await updateRegistration(registration.id, { status: 'confirmed', paymentId: id });
       setProcessing(false);
       navigate(`/comprovante/${registration.id}`);
     }, 2000);
