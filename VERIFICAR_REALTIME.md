@@ -77,7 +77,7 @@ Você deve ver mensagens como:
    - Navegador 2: https://corrida-app-sooty.vercel.app/
 
 2. No **Navegador 1**:
-   - Faça login como admin (`admin@runbrasil.com.br` / `1Corintios10.31`)
+   - Faça login como admin (`admin@smartbrasilticket.com.br` / `1Corintios10.31`)
    - Vá em "Eventos" → "Novo Evento"
    - Crie um evento de teste
 

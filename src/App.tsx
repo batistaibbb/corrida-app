@@ -36,7 +36,7 @@ function Header() {
               <Trophy className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-semibold text-slate-900 tracking-tight">
-              RunBrasil
+              Smart Brasil Ticket
             </span>
           </Link>
 
@@ -460,7 +460,7 @@ function HomePage() {
                 <div className="bg-emerald-600 p-2.5 rounded-lg">
                   <Trophy className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-xl font-semibold text-white">RunBrasil</span>
+                <span className="text-xl font-semibold text-white">Smart Brasil Ticket</span>
               </div>
               <p className="text-sm leading-relaxed">
                 A maior plataforma de inscrições para eventos esportivos do Brasil.
@@ -498,7 +498,7 @@ function HomePage() {
             </div>
           </div>
           <div className="pt-8 border-t border-slate-800 text-center text-sm">
-            <p>&copy; 2024 RunBrasil. Todos os direitos reservados.</p>
+            <p>&copy; 2024 Smart Brasil Ticket. Todos os direitos reservados.</p>
           </div>
         </div>
       </footer>
@@ -571,7 +571,7 @@ function LoginPage() {
         {isLogin && (
           <div className="mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
             <p className="text-xs font-semibold text-sky-700 mb-2">Credenciais de teste:</p>
-            <p className="text-xs text-sky-600"><strong>Admin:</strong> admin@runbrasil.com.br / admin123</p>
+            <p className="text-xs text-sky-600"><strong>Admin:</strong> admin@smartbrasilticket.com.br / admin123</p>
             <p className="text-xs text-sky-600"><strong>Participante:</strong> joao@email.com / 123456</p>
           </div>
         )}
@@ -1046,7 +1046,7 @@ function PaymentPage() {
 
   if (!registration || !race || !user) return <div className="text-center py-20">Dados inválidos</div>;
 
-  const pixCode = `00020126580014br.gov.bcb.pix0136${registration.confirmationCode}520400005303986540${total.toFixed(2)}5802BR5925RUNBRASIL6009SAO PAULO6304ABCD`;
+  const pixCode = `00020126580014br.gov.bcb.pix0136${registration.confirmationCode}520400005303986540${total.toFixed(2)}5802BR5925SMARTBRASIL6009SAO PAULO6304ABCD`;
 
   const handlePixPayment = async () => {
     setProcessing(true);
@@ -1225,7 +1225,7 @@ function ReceiptPage() {
   if (!registration || !race || !payment || !user) return <div className="text-center py-20">Comprovante não encontrado</div>;
 
   const handleDownload = () => {
-    const content = `COMPROVANTE DE INSCRIÇÃO - RUNBRASIL\n\nCódigo: ${registration.confirmationCode}\n\nEVENTO\n${race.name}\nData: ${format(parseISO(race.date), "dd/MM/yyyy")}\nLocal: ${race.location}, ${race.city}/${race.state}\n\nINSCRITO\nNome: ${user.name}\nCPF: ${user.cpf}\n\nINSCRIÇÃO\nDistância: ${registration.distance}km\nCamiseta: Tam. ${registration.tshirtSize}\n\nPAGAMENTO\nMétodo: ${payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)\nTotal: R$ ${payment.total.toFixed(2).replace('.', ',')}\nStatus: APROVADO\nTransação: ${payment.transactionId}`;
+    const content = `COMPROVANTE DE INSCRIÇÃO - SMART BRASIL TICKET\n\nCódigo: ${registration.confirmationCode}\n\nEVENTO\n${race.name}\nData: ${format(parseISO(race.date), "dd/MM/yyyy")}\nLocal: ${race.location}, ${race.city}/${race.state}\n\nINSCRITO\nNome: ${user.name}\nCPF: ${user.cpf}\n\nINSCRIÇÃO\nDistância: ${registration.distance}km\nCamiseta: Tam. ${registration.tshirtSize}\n\nPAGAMENTO\nMétodo: ${payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)\nTotal: R$ ${payment.total.toFixed(2).replace('.', ',')}\nStatus: APROVADO\nTransação: ${payment.transactionId}`;
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1317,7 +1317,7 @@ function AdminDashboard() {
         <div className="p-6 border-b">
           <Link to="/" className="flex items-center gap-2">
             <div className="bg-gradient-to-r from-orange-500 to-red-600 p-2 rounded-lg"><Trophy className="w-5 h-5 text-white" /></div>
-            <span className="font-bold">RunBrasil</span>
+            <span className="font-bold">Smart Brasil Ticket</span>
           </Link>
           <p className="text-xs text-gray-500 mt-2">Painel Admin</p>
         </div>
@@ -1633,7 +1633,7 @@ function ParticipantDashboard() {
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
           <Link to="/" className="flex items-center gap-2">
             <div className="bg-gradient-to-r from-orange-500 to-red-600 p-2 rounded-lg"><Trophy className="w-6 h-6 text-white" /></div>
-            <span className="text-xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">RunBrasil</span>
+            <span className="text-xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">Smart Brasil Ticket</span>
           </Link>
           <div className="flex items-center gap-4">
             {user.role === 'admin' && (

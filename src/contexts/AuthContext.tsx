@@ -16,8 +16,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const SEED_USERS: User[] = [
   {
     id: 'admin-001',
-    name: 'Administrador RunBrasil',
-    email: 'admin@runbrasil.com.br',
+    name: 'Administrador Smart Brasil Ticket',
+    email: 'admin@smartbrasilticket.com.br',
     password: 'admin123',
     role: 'admin',
     cpf: '000.000.000-00',
