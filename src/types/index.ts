@@ -40,6 +40,20 @@ export interface Race {
   discount?: number;
   tags: string[];
   createdAt: string;
+  // Kits disponíveis para inscrição
+  kits?: RaceKit[];
+  // Tamanhos de camisa disponíveis
+  shirtSizes?: string[];
+}
+
+export interface RaceKit {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  includes: string[];
+  distance?: number; // km (0 para caminhada)
 }
 
 export type PaymentMethod = 'pix' | 'credit_card' | 'debit_card';
@@ -65,6 +79,8 @@ export interface Registration {
   raceId: string;
   distance: number;
   tshirtSize: string;
+  kitId?: string; // ID do kit selecionado
+  kitName?: string; // Nome do kit selecionado
   status: 'pending_payment' | 'confirmed' | 'cancelled';
   paymentId?: string;
   confirmationCode: string;

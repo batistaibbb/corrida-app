@@ -727,56 +727,104 @@ function RaceDetailsPage() {
               )}
             </div>
 
-            {/* Distances and Prices */}
+            {/* Kits and Prices */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h2 className="text-2xl font-bold mb-6 text-slate-900">Escolha sua Distância</h2>
-              <div className="space-y-3">
-                {race.distances.map(d => (
-                  <button
-                    key={d.km}
-                    onClick={() => setSelectedDistance(d.km)}
-                    className={`w-full flex items-center justify-between p-5 rounded-lg border-2 transition-all ${
-                      selectedDistance === d.km
-                        ? 'border-emerald-600 bg-emerald-50 shadow-sm'
-                        : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        selectedDistance === d.km ? 'bg-emerald-600' : 'bg-slate-100'
-                      }`}>
-                        <span className={`text-lg font-bold ${
-                          selectedDistance === d.km ? 'text-white' : 'text-slate-600'
+              <h2 className="text-2xl font-bold mb-6 text-slate-900">Escolha seu Kit</h2>
+              {race.kits && race.kits.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {race.kits.map(kit => (
+                    <button
+                      key={kit.id}
+                      onClick={() => setSelectedDistance(kit.distance || 0)}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        selectedDistance === (kit.distance || 0)
+                          ? 'border-emerald-600 bg-emerald-50 shadow-sm'
+                          : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50'
+                      }`}
+                    >
+                      <img src={kit.image} alt={kit.name} className="w-full h-40 object-cover rounded-lg mb-3" />
+                      <h3 className="font-bold text-slate-900 mb-1">{kit.name}</h3>
+                      <p className="text-sm text-slate-600 mb-2">{kit.description}</p>
+                      <ul className="text-xs text-slate-500 mb-3 space-y-1">
+                        {kit.includes.map((item, i) => (
+                          <li key={i}>✓ {item}</li>
+                        ))}
+                      </ul>
+                      <div className="flex justify-between items-center">
+                        <div>
+                          {race.discount ? (
+                            <>
+                              <p className="text-sm text-slate-400 line-through">
+                                R$ {kit.price.toFixed(2).replace('.', ',')}
+                              </p>
+                              <p className="text-2xl font-bold text-emerald-600">
+                                R$ {(kit.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-2xl font-bold text-emerald-600">
+                              R$ {kit.price.toFixed(2).replace('.', ',')}
+                            </p>
+                          )}
+                        </div>
+                        {kit.distance && kit.distance > 0 && (
+                          <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded">
+                            {kit.distance}km
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {race.distances.map(d => (
+                    <button
+                      key={d.km}
+                      onClick={() => setSelectedDistance(d.km)}
+                      className={`w-full flex items-center justify-between p-5 rounded-lg border-2 transition-all ${
+                        selectedDistance === d.km
+                          ? 'border-emerald-600 bg-emerald-50 shadow-sm'
+                          : 'border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                          selectedDistance === d.km ? 'bg-emerald-600' : 'bg-slate-100'
                         }`}>
-                          {d.km}
-                        </span>
+                          <span className={`text-lg font-bold ${
+                            selectedDistance === d.km ? 'text-white' : 'text-slate-600'
+                          }`}>
+                            {d.km}
+                          </span>
+                        </div>
+                        <div className="text-left">
+                          <p className="font-semibold text-lg text-slate-900">{d.km} km</p>
+                          <p className="text-sm text-slate-500">
+                            {d.km <= 5 ? 'Iniciante' : d.km <= 10 ? 'Intermediário' : 'Avançado'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-left">
-                        <p className="font-semibold text-lg text-slate-900">{d.km} km</p>
-                        <p className="text-sm text-slate-500">
-                          {d.km <= 5 ? 'Iniciante' : d.km <= 10 ? 'Intermediário' : 'Avançado'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      {race.discount ? (
-                        <>
-                          <p className="text-sm text-slate-400 line-through">
+                      <div className="text-right">
+                        {race.discount ? (
+                          <>
+                            <p className="text-sm text-slate-400 line-through">
+                              R$ {d.price.toFixed(2).replace('.', ',')}
+                            </p>
+                            <p className="text-2xl font-bold text-emerald-600">
+                              R$ {(d.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-2xl font-bold text-emerald-600">
                             R$ {d.price.toFixed(2).replace('.', ',')}
                           </p>
-                          <p className="text-2xl font-bold text-emerald-600">
-                            R$ {(d.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="text-2xl font-bold text-emerald-600">
-                          R$ {d.price.toFixed(2).replace('.', ',')}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* What's Included */}
@@ -902,14 +950,17 @@ function RaceDetailsPage() {
 
 function RegistrationPage() {
   const { id } = useParams();
-  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { getRaceById, addRegistration } = useData();
   const navigate = useNavigate();
-  const distance = parseInt(searchParams.get('distance') || '0');
   const race = id ? getRaceById(id) : null;
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', phone: '', cpf: '', birthDate: '', gender: '', tshirtSize: '', address: '', city: '', state: '', zipCode: '', emergencyName: '', emergencyPhone: '', acceptTerms: false, acceptMedical: false });
+  const [selectedKit, setSelectedKit] = useState<string>('');
+  const [formData, setFormData] = useState({ 
+    firstName: '', lastName: '', email: '', phone: '', cpf: '', birthDate: '', gender: '', 
+    tshirtSize: '', address: '', city: '', state: '', zipCode: '', 
+    emergencyName: '', emergencyPhone: '', acceptTerms: false, acceptMedical: false 
+  });
 
   if (!race || !user) return <div className="text-center py-20">Dados inválidos</div>;
 
@@ -918,13 +969,20 @@ function RegistrationPage() {
     setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value }));
   };
 
+  const getSelectedKit = () => {
+    return race.kits?.find(k => k.id === selectedKit);
+  };
+
   const handleSubmit = async () => {
     try {
+      const kit = getSelectedKit();
       const regId = await addRegistration({
         userId: user.id,
         raceId: race.id,
-        distance,
+        distance: kit?.distance || 0,
         tshirtSize: formData.tshirtSize,
+        kitId: selectedKit,
+        kitName: kit?.name,
         status: 'pending_payment',
         emergencyName: formData.emergencyName,
         emergencyPhone: formData.emergencyPhone,
@@ -941,7 +999,7 @@ function RegistrationPage() {
       <div className="bg-white border-b sticky top-0 z-50">
         <div className="max-w-4xl mx-auto px-4 py-4 flex items-center gap-4">
           <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-lg"><ArrowLeft className="w-5 h-5" /></button>
-          <div><h1 className="font-bold">Inscrição - {race.name}</h1><p className="text-sm text-gray-500">{distance}km</p></div>
+          <div><h1 className="font-bold">Inscrição - {race.name}</h1><p className="text-sm text-gray-500">Passo {step} de 4</p></div>
         </div>
       </div>
 
@@ -949,6 +1007,55 @@ function RegistrationPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-white rounded-xl p-6 shadow-sm">
             {step === 1 && (
+              <div className="space-y-4">
+                <h2 className="text-lg font-bold">Escolha seu Kit</h2>
+                {race.kits && race.kits.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {race.kits.map(kit => (
+                      <button
+                        key={kit.id}
+                        onClick={() => setSelectedKit(kit.id)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${
+                          selectedKit === kit.id 
+                            ? 'border-emerald-500 bg-emerald-50' 
+                            : 'border-slate-200 hover:border-emerald-300'
+                        }`}
+                      >
+                        <img src={kit.image} alt={kit.name} className="w-full h-40 object-cover rounded-lg mb-3" />
+                        <h3 className="font-bold text-slate-900 mb-1">{kit.name}</h3>
+                        <p className="text-sm text-slate-600 mb-2">{kit.description}</p>
+                        <ul className="text-xs text-slate-500 mb-3 space-y-1">
+                          {kit.includes.map((item, i) => (
+                            <li key={i}>✓ {item}</li>
+                          ))}
+                        </ul>
+                        <div className="flex justify-between items-center">
+                          <span className="text-2xl font-bold text-emerald-600">R$ {kit.price.toFixed(2).replace('.', ',')}</span>
+                          {kit.distance && kit.distance > 0 && (
+                            <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded">
+                              {kit.distance}km
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-slate-500">Nenhum kit disponível para este evento</p>
+                  </div>
+                )}
+                <button 
+                  onClick={() => setStep(2)} 
+                  disabled={!selectedKit} 
+                  className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Próximo
+                </button>
+              </div>
+            )}
+
+            {step === 2 && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold">Dados Pessoais</h2>
                 <div className="grid grid-cols-2 gap-4">
@@ -967,21 +1074,40 @@ function RegistrationPage() {
                   <option value="feminino">Feminino</option>
                   <option value="outro">Outro</option>
                 </select>
-                <button onClick={() => setStep(2)} disabled={!formData.firstName || !formData.email || !formData.cpf} className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
+                <div className="flex gap-3">
+                  <button onClick={() => setStep(1)} className="px-6 py-3 border rounded-xl">Voltar</button>
+                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !formData.email || !formData.cpf} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
+                </div>
               </div>
             )}
 
-            {step === 2 && (
+            {step === 3 && (
               <div className="space-y-4">
-                <h2 className="text-lg font-bold">Endereço e Preferências</h2>
-                <div>
-                  <label className="block text-sm font-medium mb-2">Tamanho da Camiseta</label>
-                  <div className="flex flex-wrap gap-2">
-                    {['PP', 'P', 'M', 'G', 'GG', 'XGG'].map(size => (
-                      <button key={size} type="button" onClick={() => setFormData(prev => ({ ...prev, tshirtSize: size }))} className={`px-4 py-2 rounded-lg border-2 ${formData.tshirtSize === size ? 'border-orange-500 bg-orange-50' : 'border-gray-200'}`}>{size}</button>
-                    ))}
+                <h2 className="text-lg font-bold">Tamanho e Endereço</h2>
+                
+                {/* Tamanho da Camisa - apenas se o kit incluir camisa */}
+                {getSelectedKit()?.includes.some(item => item.toLowerCase().includes('camisa')) && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Tamanho da Camiseta *</label>
+                    <div className="flex flex-wrap gap-2">
+                      {(race.shirtSizes || ['PP', 'P', 'M', 'G', 'GG', 'XGG']).map(size => (
+                        <button 
+                          key={size} 
+                          type="button" 
+                          onClick={() => setFormData(prev => ({ ...prev, tshirtSize: size }))} 
+                          className={`px-4 py-2 rounded-lg border-2 ${
+                            formData.tshirtSize === size 
+                              ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                              : 'border-slate-200 hover:border-emerald-300'
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
+
                 <input type="text" name="address" value={formData.address} onChange={handleChange} placeholder="Endereço" className="w-full px-4 py-2.5 border rounded-lg" required />
                 <div className="grid grid-cols-3 gap-4">
                   <input type="text" name="city" value={formData.city} onChange={handleChange} placeholder="Cidade" className="px-4 py-2.5 border rounded-lg" required />
@@ -989,13 +1115,22 @@ function RegistrationPage() {
                   <input type="text" name="zipCode" value={formData.zipCode} onChange={handleChange} placeholder="CEP" className="px-4 py-2.5 border rounded-lg" required />
                 </div>
                 <div className="flex gap-3">
-                  <button onClick={() => setStep(1)} className="px-6 py-3 border rounded-xl">Voltar</button>
-                  <button onClick={() => setStep(3)} disabled={!formData.tshirtSize || !formData.address} className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
+                  <button onClick={() => setStep(2)} className="px-6 py-3 border rounded-xl">Voltar</button>
+                  <button 
+                    onClick={() => setStep(4)} 
+                    disabled={
+                      (getSelectedKit()?.includes.some(item => item.toLowerCase().includes('camisa')) && !formData.tshirtSize) || 
+                      !formData.address
+                    } 
+                    className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50"
+                  >
+                    Próximo
+                  </button>
                 </div>
               </div>
             )}
 
-            {step === 3 && (
+            {step === 4 && (
               <div className="space-y-4">
                 <h2 className="text-lg font-bold">Emergência e Termos</h2>
                 <div className="grid grid-cols-2 gap-4">
@@ -1005,8 +1140,8 @@ function RegistrationPage() {
                 <label className="flex items-start gap-2"><input type="checkbox" name="acceptTerms" checked={formData.acceptTerms} onChange={handleChange} className="mt-1" /><span className="text-sm">Li e aceito os termos de uso *</span></label>
                 <label className="flex items-start gap-2"><input type="checkbox" name="acceptMedical" checked={formData.acceptMedical} onChange={handleChange} className="mt-1" /><span className="text-sm">Declaro que possuo atestado médico *</span></label>
                 <div className="flex gap-3">
-                  <button onClick={() => setStep(2)} className="px-6 py-3 border rounded-xl">Voltar</button>
-                  <button onClick={handleSubmit} disabled={!formData.emergencyName || !formData.acceptTerms || !formData.acceptMedical} className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold rounded-xl disabled:opacity-50">Finalizar Inscrição</button>
+                  <button onClick={() => setStep(3)} className="px-6 py-3 border rounded-xl">Voltar</button>
+                  <button onClick={handleSubmit} disabled={!formData.emergencyName || !formData.acceptTerms || !formData.acceptMedical} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Finalizar Inscrição</button>
                 </div>
               </div>
             )}
@@ -1016,8 +1151,18 @@ function RegistrationPage() {
             <h3 className="font-bold mb-4">Resumo</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">Evento</span><span className="font-medium">{race.name}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Distância</span><span className="font-medium">{distance} km</span></div>
-              <div className="flex justify-between pt-3 border-t"><span className="font-bold">Total</span><span className="font-bold text-orange-600">R$ {(race.distances.find(d => d.km === distance)?.price || 0).toFixed(2).replace('.', ',')}</span></div>
+              {selectedKit && getSelectedKit() && (
+                <>
+                  <div className="flex justify-between"><span className="text-gray-500">Kit</span><span className="font-medium">{getSelectedKit()?.name}</span></div>
+                  {getSelectedKit()?.distance && getSelectedKit()?.distance! > 0 && (
+                    <div className="flex justify-between"><span className="text-gray-500">Distância</span><span className="font-medium">{getSelectedKit()?.distance} km</span></div>
+                  )}
+                  {formData.tshirtSize && (
+                    <div className="flex justify-between"><span className="text-gray-500">Camisa</span><span className="font-medium">Tam. {formData.tshirtSize}</span></div>
+                  )}
+                  <div className="flex justify-between pt-3 border-t"><span className="font-bold">Total</span><span className="font-bold text-emerald-600">R$ {getSelectedKit()?.price.toFixed(2).replace('.', ',')}</span></div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1553,6 +1698,8 @@ function RaceFormModal({ race, onSave, onClose, organizerId, organizerName }: { 
     discount: race?.discount || 0,
     tags: race?.tags || [''],
     distances: race?.distances || [{ km: 5, price: 100 }],
+    kits: race?.kits || [],
+    shirtSizes: race?.shirtSizes || ['PP', 'P', 'M', 'G', 'GG', 'XGG'],
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -1563,6 +1710,8 @@ function RaceFormModal({ race, onSave, onClose, organizerId, organizerName }: { 
       rules: formData.rules.filter(r => r.trim()),
       tags: formData.tags.filter(t => t.trim()),
       distances: formData.distances.filter(d => d.km > 0 && d.price > 0),
+      kits: formData.kits,
+      shirtSizes: formData.shirtSizes,
     });
   };
 
@@ -1606,9 +1755,75 @@ function RaceFormModal({ race, onSave, onClose, organizerId, organizerName }: { 
                 <option value="finished">Evento Finalizado</option>
               </select>
             </div>
+
+            {/* Kits */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Kits de Inscrição</label>
+              <div className="space-y-3">
+                {formData.kits.map((kit, index) => (
+                  <div key={index} className="p-4 border rounded-lg space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold text-sm">Kit {index + 1}</span>
+                      <button type="button" onClick={() => setFormData({...formData, kits: formData.kits.filter((_, i) => i !== index)})} className="text-red-600 hover:bg-red-50 p-1 rounded">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <input type="text" value={kit.name} onChange={(e) => {
+                      const newKits = [...formData.kits];
+                      newKits[index] = {...kit, name: e.target.value};
+                      setFormData({...formData, kits: newKits});
+                    }} placeholder="Nome do Kit" className="w-full px-3 py-2 border rounded-lg text-sm" />
+                    <input type="text" value={kit.description} onChange={(e) => {
+                      const newKits = [...formData.kits];
+                      newKits[index] = {...kit, description: e.target.value};
+                      setFormData({...formData, kits: newKits});
+                    }} placeholder="Descrição" className="w-full px-3 py-2 border rounded-lg text-sm" />
+                    <input type="url" value={kit.image} onChange={(e) => {
+                      const newKits = [...formData.kits];
+                      newKits[index] = {...kit, image: e.target.value};
+                      setFormData({...formData, kits: newKits});
+                    }} placeholder="URL da Imagem do Kit" className="w-full px-3 py-2 border rounded-lg text-sm" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="number" value={kit.price} onChange={(e) => {
+                        const newKits = [...formData.kits];
+                        newKits[index] = {...kit, price: parseFloat(e.target.value)};
+                        setFormData({...formData, kits: newKits});
+                      }} placeholder="Preço" className="px-3 py-2 border rounded-lg text-sm" step="0.01" />
+                      <input type="number" value={kit.distance || 0} onChange={(e) => {
+                        const newKits = [...formData.kits];
+                        newKits[index] = {...kit, distance: parseFloat(e.target.value)};
+                        setFormData({...formData, kits: newKits});
+                      }} placeholder="Distância (km)" className="px-3 py-2 border rounded-lg text-sm" step="0.1" />
+                    </div>
+                    <input type="text" value={kit.includes.join(', ')} onChange={(e) => {
+                      const newKits = [...formData.kits];
+                      newKits[index] = {...kit, includes: e.target.value.split(',').map(s => s.trim())};
+                      setFormData({...formData, kits: newKits});
+                    }} placeholder="Incluso (separado por vírgula)" className="w-full px-3 py-2 border rounded-lg text-sm" />
+                  </div>
+                ))}
+                <button type="button" onClick={() => setFormData({...formData, kits: [...formData.kits, { id: `kit-${Date.now()}`, name: '', description: '', price: 0, image: '', includes: [], distance: 0 }]})} className="w-full py-2 border-2 border-dashed border-slate-300 rounded-lg text-slate-600 hover:border-emerald-500 hover:text-emerald-600">
+                  + Adicionar Kit
+                </button>
+              </div>
+            </div>
+
+            {/* Tamanhos de Camisa */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Tamanhos de Camisa Disponíveis</label>
+              <input 
+                type="text" 
+                value={formData.shirtSizes.join(', ')} 
+                onChange={(e) => setFormData({...formData, shirtSizes: e.target.value.split(',').map(s => s.trim()).filter(s => s)})} 
+                placeholder="PP, P, M, G, GG, XGG" 
+                className="w-full px-4 py-2.5 border rounded-lg" 
+              />
+              <p className="text-xs text-slate-500 mt-1">Separe os tamanhos por vírgula</p>
+            </div>
+
             <div className="flex justify-end gap-3 pt-4 border-t">
               <button type="button" onClick={onClose} className="px-6 py-2.5 border rounded-lg">Cancelar</button>
-              <button type="submit" className="px-6 py-2.5 bg-gradient-to-r from-orange-500 to-red-600 text-white font-medium rounded-lg">{race ? 'Salvar' : 'Criar'}</button>
+              <button type="submit" className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-medium rounded-lg">{race ? 'Salvar' : 'Criar'}</button>
             </div>
           </form>
         </div>
