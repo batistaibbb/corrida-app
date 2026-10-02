@@ -28,7 +28,10 @@ export interface Race {
   maxParticipants: number;
   category: string;
   sport: string;
-  status: 'draft' | 'published' | 'open' | 'closed' | 'finished';
+  // Status de publicação (visibilidade)
+  published: boolean;
+  // Status de inscrição (temporal)
+  registrationStatus: 'upcoming' | 'closed' | 'finished';
   includes: string[];
   rules: string[];
   rating: number;
