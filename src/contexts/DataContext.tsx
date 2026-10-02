@@ -17,6 +17,7 @@ interface DataContextType {
   getPaymentByRegistration: (registrationId: string) => Payment | undefined;
   getRaceById: (id: string) => Race | undefined;
   getStats: () => { totalEvents: number; totalRegistrations: number; totalRevenue: number; pendingPayments: number };
+  refreshData: () => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -57,14 +58,29 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
 
+  // Carregar dados do localStorage ou seed
   useEffect(() => {
-    const storedRaces = localStorage.getItem('rb_races');
-    const storedRegs = localStorage.getItem('rb_registrations');
-    const storedPays = localStorage.getItem('rb_payments');
+    const loadData = () => {
+      const storedRaces = localStorage.getItem('rb_races');
+      const storedRegs = localStorage.getItem('rb_registrations');
+      const storedPays = localStorage.getItem('rb_payments');
 
-    setRaces(storedRaces ? JSON.parse(storedRaces) : seedRaces);
-    setRegistrations(storedRegs ? JSON.parse(storedRegs) : SEED_REGISTRATIONS);
-    setPayments(storedPays ? JSON.parse(storedPays) : SEED_PAYMENTS);
+      setRaces(storedRaces ? JSON.parse(storedRaces) : seedRaces);
+      setRegistrations(storedRegs ? JSON.parse(storedRegs) : SEED_REGISTRATIONS);
+      setPayments(storedPays ? JSON.parse(storedPays) : SEED_PAYMENTS);
+    };
+
+    loadData();
+
+    // Listener para sincronizar entre abas/janelas
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'rb_races' || e.key === 'rb_registrations' || e.key === 'rb_payments') {
+        loadData();
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   useEffect(() => {
@@ -161,6 +177,16 @@ export function DataProvider({ children }: { children: ReactNode }) {
     };
   };
 
+  const refreshData = () => {
+    const storedRaces = localStorage.getItem('rb_races');
+    const storedRegs = localStorage.getItem('rb_registrations');
+    const storedPays = localStorage.getItem('rb_payments');
+
+    if (storedRaces) setRaces(JSON.parse(storedRaces));
+    if (storedRegs) setRegistrations(JSON.parse(storedRegs));
+    if (storedPays) setPayments(JSON.parse(storedPays));
+  };
+
   return (
     <DataContext.Provider
       value={{
@@ -178,6 +204,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         getPaymentByRegistration,
         getRaceById,
         getStats,
+        refreshData,
       }}
     >
       {children}

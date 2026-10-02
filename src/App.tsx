@@ -13,7 +13,7 @@ import {
   User, Mail, Lock, Unlock, Eye, EyeOff, ArrowRight, ArrowLeft,
   LogOut, LayoutDashboard, CreditCard, FileText, CheckCircle,
   QrCode, Copy, Check, Shield, Download, Plus, Edit, Trash2,
-  DollarSign, AlertCircle, Phone, Home as HomeIcon, Heart, Share2
+  DollarSign, AlertCircle, Phone, Home as HomeIcon, Heart, Share2, RefreshCw
 } from 'lucide-react';
 
 // ============ COMPONENTS ============
@@ -96,11 +96,17 @@ function ProtectedRoute({ children, requiredRole }: { children: ReactNode; requi
 // ============ PAGES ============
 
 function HomePage() {
-  const { races } = useData();
+  const { races, refreshData } = useData();
   const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedDate, setSelectedDate] = useState('all');
+  const [lastSync, setLastSync] = useState<Date>(new Date());
+
+  const handleRefresh = () => {
+    refreshData();
+    setLastSync(new Date());
+  };
   
   const categories = [
     { id: 'all', name: 'Todos', icon: Trophy },
@@ -237,24 +243,33 @@ function HomePage() {
 
       {/* Category Filters */}
       <section className="max-w-7xl mx-auto px-4 py-10">
-        <div className="flex items-center gap-3 overflow-x-auto pb-4 scrollbar-hide">
-          {categories.map((cat) => {
-            const IconComponent = cat.icon;
-            return (
-              <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`flex items-center gap-2.5 px-6 py-3 rounded-lg font-medium whitespace-nowrap transition-all ${
-                  selectedCategory === cat.id
-                    ? 'bg-emerald-600 text-white shadow-md'
-                    : 'bg-white text-slate-700 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300'
-                }`}
-              >
-                <IconComponent className="w-5 h-5" />
-                <span>{cat.name}</span>
-              </button>
-            );
-          })}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3 overflow-x-auto pb-4 scrollbar-hide flex-1">
+            {categories.map((cat) => {
+              const IconComponent = cat.icon;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`flex items-center gap-2.5 px-6 py-3 rounded-lg font-medium whitespace-nowrap transition-all ${
+                    selectedCategory === cat.id
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'bg-white text-slate-700 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300'
+                  }`}
+                >
+                  <IconComponent className="w-5 h-5" />
+                  <span>{cat.name}</span>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="ml-4 p-2 text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+            title={`Sincronizar dados (última sincronização: ${lastSync.toLocaleTimeString('pt-BR')})`}
+          >
+            <RefreshCw className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Date Filters */}
