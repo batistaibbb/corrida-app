@@ -84,6 +84,8 @@ function convertRaceFromSupabase(race: any): Race {
     discount: race.discount || 0,
     tags: race.tags || [],
     distances: race.distances || [],
+    kits: race.kits || [],
+    shirtSizes: race.shirt_sizes || race.shirtSizes || ['PP', 'P', 'M', 'G', 'GG', 'XGG'],
     createdAt: race.created_at || race.createdAt,
   };
 }
@@ -95,6 +97,8 @@ function convertRegistrationFromSupabase(reg: any): Registration {
     raceId: reg.race_id || reg.raceId,
     distance: reg.distance,
     tshirtSize: reg.tshirt_size || reg.tshirtSize,
+    kitId: reg.kit_id || reg.kitId,
+    kitName: reg.kit_name || reg.kitName,
     status: reg.status,
     paymentId: reg.payment_id || reg.paymentId,
     confirmationCode: reg.confirmation_code || reg.confirmationCode,
@@ -295,31 +299,37 @@ export function DataProvider({ children }: { children: ReactNode }) {
   // CRUD Operations
   const addRace = async (race: Omit<Race, 'id' | 'createdAt' | 'rating' | 'reviews' | 'participants'>) => {
     if (!isDemoMode && supabase) {
+      const insertData: any = {
+        name: race.name,
+        date: race.date,
+        time: race.time,
+        location: race.location,
+        city: race.city,
+        state: race.state,
+        image_url: race.image,
+        description: race.description,
+        organizer_id: race.organizerId,
+        organizer_name: race.organizer,
+        max_participants: race.maxParticipants,
+        category: race.category,
+        sport: race.sport,
+        published: race.published,
+        registration_status: race.registrationStatus,
+        includes: race.includes,
+        rules: race.rules,
+        featured: race.featured,
+        discount: race.discount,
+        tags: race.tags,
+        distances: race.distances,
+      };
+      
+      // Adicionar kits e tamanhos de camisa se disponíveis
+      if (race.kits) insertData.kits = race.kits;
+      if (race.shirtSizes) insertData.shirt_sizes = race.shirtSizes;
+      
       const { error } = await supabase
         .from('races')
-        .insert({
-          name: race.name,
-          date: race.date,
-          time: race.time,
-          location: race.location,
-          city: race.city,
-          state: race.state,
-          image_url: race.image,
-          description: race.description,
-          organizer_id: race.organizerId,
-          organizer_name: race.organizer,
-          max_participants: race.maxParticipants,
-          category: race.category,
-          sport: race.sport,
-          published: race.published,
-          registration_status: race.registrationStatus,
-          includes: race.includes,
-          rules: race.rules,
-          featured: race.featured,
-          discount: race.discount,
-          tags: race.tags,
-          distances: race.distances,
-        });
+        .insert(insertData);
       
       if (error) throw error;
       await loadRaces();
@@ -359,6 +369,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (data.discount !== undefined) updateData.discount = data.discount;
       if (data.tags !== undefined) updateData.tags = data.tags;
       if (data.distances !== undefined) updateData.distances = data.distances;
+      if (data.kits !== undefined) updateData.kits = data.kits;
+      if (data.shirtSizes !== undefined) updateData.shirt_sizes = data.shirtSizes;
       
       const { error } = await supabase
         .from('races')
@@ -390,18 +402,24 @@ export function DataProvider({ children }: { children: ReactNode }) {
     const confirmationCode = `RB${Math.random().toString(36).substring(2, 12).toUpperCase()}`;
     
     if (!isDemoMode && supabase) {
+      const insertData: any = {
+        user_id: reg.userId,
+        race_id: reg.raceId,
+        distance: reg.distance,
+        tshirt_size: reg.tshirtSize,
+        status: reg.status,
+        confirmation_code: confirmationCode,
+        emergency_name: reg.emergencyName,
+        emergency_phone: reg.emergencyPhone,
+      };
+      
+      // Adicionar kit se selecionado
+      if (reg.kitId) insertData.kit_id = reg.kitId;
+      if (reg.kitName) insertData.kit_name = reg.kitName;
+      
       const { data, error } = await supabase
         .from('registrations')
-        .insert({
-          user_id: reg.userId,
-          race_id: reg.raceId,
-          distance: reg.distance,
-          tshirt_size: reg.tshirtSize,
-          status: reg.status,
-          confirmation_code: confirmationCode,
-          emergency_name: reg.emergencyName,
-          emergency_phone: reg.emergencyPhone,
-        })
+        .insert(insertData)
         .select()
         .single();
       
