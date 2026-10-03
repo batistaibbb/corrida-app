@@ -31,8 +31,8 @@ serve(async (req) => {
     if (!authHeader) throw new Error("Não autenticado");
 
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      Deno.env.get("PROJECT_URL") ?? "",
+      Deno.env.get("ANON_KEY") ?? "",
       { global: { headers: { Authorization: authHeader } } }
     );
 
@@ -72,8 +72,8 @@ serve(async (req) => {
 
     // Client com service role para garantir o update mesmo com RLS restritiva
     const admin = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      Deno.env.get("PROJECT_URL") ?? "",
+      Deno.env.get("SERVICE_ROLE_KEY") ?? ""
     );
 
     const paidAt = payment.date_approved || new Date().toISOString();

@@ -71,8 +71,8 @@ serve(async (req) => {
 
     // Initialize Supabase client with service role (bypasses RLS)
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+      Deno.env.get("PROJECT_URL") ?? "",
+      Deno.env.get("SERVICE_ROLE_KEY") ?? ""
     );
 
     // Get payment details from Mercado Pago API

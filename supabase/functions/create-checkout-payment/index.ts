@@ -38,8 +38,8 @@ serve(async (req) => {
 
     // Cliente com o token do usuário (RLS respeitada para leitura da inscrição)
     const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      Deno.env.get("PROJECT_URL") ?? "",
+      Deno.env.get("ANON_KEY") ?? "",
       { global: { headers: { Authorization: authHeader } } }
     );
 
@@ -51,11 +51,11 @@ serve(async (req) => {
     // pagamento — o fluxo continua funcionando sem login ativo.
     const isServiceMode = !user;
     if (isServiceMode) {
-      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      const serviceKey = Deno.env.get("SERVICE_ROLE_KEY");
       if (!serviceKey) throw new Error("Usuário não autenticado");
       user = { id: "" } as any;
       var supabaseAdmin = createClient(
-        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("PROJECT_URL") ?? "",
         serviceKey
       );
     }
@@ -144,7 +144,7 @@ serve(async (req) => {
         // external_reference = código de confirmação: permite ao webhook localizar a inscrição
         external_reference: registration.confirmation_code,
         // Webhook: atualização automática do status no banco
-        notification_url: `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`,
+        notification_url: `${Deno.env.get("PROJECT_URL")}/functions/v1/mercadopago-webhook`,
         // Retorno do comprador para o site (confirmação em tela também é automática)
         back_urls: {
           success: `${appUrl}/pagamento/${registrationId}?status=approved`,
