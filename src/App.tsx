@@ -1396,21 +1396,31 @@ function PaymentPage() {
   //           do MP e gravamos no banco caso o webhook ainda não tenha chegado.
   // Camada 3: polling no banco (Supabase Realtime em payments já recarrega a lista,
   //           mas aqui consultamos explicitamente) até status != pending.
-  const syncRegistrationStatus = async () => {
+  // Consulta o status direto no banco usando a MESMA técnica do login:
+  // API REST do Supabase com anon key. Funciona em aba anônima e não trava
+  // em RLS nem em sessão expirada (a Edge Function grava via service role).
+  const queryRegistrationStatus = async (): Promise<string | null> => {
     try {
-      const { data } = await supabase!
-        .from('registrations')
-        .select('id, status, payment_id')
-        .eq('id', registration!.id)
-        .maybeSingle();
-      if (data?.status === 'confirmed') {
-        navigate(`/comprovante/${registration!.id}`);
-        return true;
-      }
-      return false;
+      const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || supabaseAnonKeySafe;
+      const res = await fetch(
+        `${supabaseUrlSafe}/rest/v1/registrations?id=eq.${registration!.id}&select=id,status,payment_id`,
+        { headers: { apikey: anonKey, Authorization: `Bearer ${anonKey}`, Accept: 'application/json' } }
+      );
+      if (!res.ok) return null;
+      const rows = await res.json();
+      return Array.isArray(rows) && rows.length ? String(rows[0].status) : null;
     } catch {
-      return false;
+      return null;
     }
+  };
+
+  const syncRegistrationStatus = async () => {
+    const status = await queryRegistrationStatus();
+    if (status === 'confirmed') {
+      navigate(`/comprovante/${registration!.id}`);
+      return true;
+    }
+    return false;
   };
 
   const startStatusPolling = () => {
@@ -1418,22 +1428,27 @@ function PaymentPage() {
     let attempts = 0;
     mpPollRef.current = window.setInterval(async () => {
       attempts += 1;
-      if (attempts > 45) { if (mpPollRef.current) window.clearInterval(mpPollRef.current); return; } // ~90s
+      if (attempts > 60) { if (mpPollRef.current) window.clearInterval(mpPollRef.current); return; } // ~3 min
       const done = await syncRegistrationStatus();
       if (done && mpPollRef.current) window.clearInterval(mpPollRef.current);
-    }, 2000);
+    }, 3000);
   };
 
   // Confirmação server-side via Edge Function (usa token seguro, sem expor credenciais)
   const confirmCheckoutPayment = async (mpPaymentId: string) => {
-    const { data: sessionData } = await supabase!.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
+    const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || supabaseAnonKeySafe;
+    let accessToken: string | undefined;
+    try {
+      const sessionRes = await supabase?.auth.getSession();
+      accessToken = sessionRes?.data?.session?.access_token;
+    } catch { /* segue sem sessão */ }
     const fnUrl = `${supabaseUrlSafe}/functions/v1/confirm-checkout-payment`;
     const res = await fetch(fnUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
+        apikey: anonKey,
+        Authorization: `Bearer ${accessToken || anonKey}`,
         'x-app-url': window.location.origin,
       },
       body: JSON.stringify({ registrationId: registration!.id, mpPaymentId }),
