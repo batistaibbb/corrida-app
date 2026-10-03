@@ -48,7 +48,7 @@ Todos usam `IF NOT EXISTS` — são **seguros para re-executar**.
 1. Acesse [mercadopago.com.br/developers](https://www.mercadopago.com.br/developers) → crie uma aplicação.
 2. Em **"Credenciais de teste"** copie o **Access Token** (começa com `TEST-`). Para produção, gere as credenciais de produção quando tudo estiver validado.
 3. No **Supabase → Project Settings → API Keys (Edge Functions / Secrets)**, adicione:
-   - Nome: `MP_ACCESS_TOKEN`
+   - Nome: `MERCADOPAGO_ACCESS_TOKEN`
    - Valor: o token copiado
 
 ---
@@ -103,7 +103,7 @@ Confira em **Supabase → Edge Functions** que as três aparecem como *Active*.
 ## ETAPA 7 — Virar produção
 
 Quando os testes passarem:
-1. Gere o **Access Token de produção** no MP e substitua `MP_ACCESS_TOKEN` no Supabase.
+1. Gere o **Access Token de produção** no MP e substitua `MERCADOPAGO_ACCESS_TOKEN` no Supabase.
 2. Atualize o webhook do MP apontando para a mesma URL (ele passa a receber eventos de produção).
 3. Faça uma compra-teste real de baixo valor (ou cancele em seguida) para validar o fluxo completo.
 
@@ -115,7 +115,7 @@ Quando os testes passarem:
 - [ ] `ADD_PRICE_TO_REGISTRATIONS.sql` executado
 - [ ] `ADD_PARTICIPANT_TO_REGISTRATIONS.sql` executado
 - [ ] `MERCADOPAGO_CHECKOUT_SETUP.sql` executado
-- [ ] Secret `MP_ACCESS_TOKEN` criado no Supabase
+- [ ] Secret `MERCADOPAGO_ACCESS_TOKEN` criado no Supabase
 - [ ] 3 Edge Functions implantadas (create / confirm / webhook)
 - [ ] Webhook cadastrado no Mercado Pago (+ `MP_WEBHOOK_SECRET` se usar assinatura)
 - [ ] Compra de teste aprovada e inscrição confirmada automaticamente
