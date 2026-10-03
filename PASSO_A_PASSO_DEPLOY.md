@@ -152,3 +152,22 @@ Se ainda não existir, crie o secret `SUPABASE_SERVICE_ROLE_KEY` (Dashboard →
 Settings → API → `service_role` — NUNCA exponha essa chave no frontend) em
 Code Edge → Secrets. As demais funções já usavam esse secret, então ele
 provavelmente já está configurado.
+
+---
+
+## APP_URL (opcional, recomendado)
+
+`APP_URL` é uma secret usada na função `create-checkout-payment` para montar os
+`back_urls` do Mercado Pago — ou seja, para onde o comprador volta depois de pagar.
+
+Ordem de prioridade no código:
+1. Secret `APP_URL` (Supabase → Code Edge → Secrets)
+2. Header `x-app-url` enviado pelo navegador
+3. Fallback fixo: `https://smartbrasilticket.vercel.app`
+
+Como o domínio atual já é o fallback hardcoded, configurar a secret é OPCIONAL.
+Configure-a se/quando mudar de domínio ou ativar um domínio próprio.
+
+Para criar (interface gráfica):
+Code Edge → Secrets → Add new secret → nome `APP_URL`, valor `https://smartbrasilticket.vercel.app` → Save.
+Não é preciso redeployar as funções: secrets são lidas em tempo de execução.
