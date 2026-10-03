@@ -1020,8 +1020,13 @@ function RegistrationPage() {
   };
 
   const handleSubmit = async () => {
+    const kit = getSelectedKit();
+    // Validação explícita: sem preço numérico válido a tela de pagamento quebraria
+    if (!kit || !Number.isFinite(Number(kit.price)) || Number(kit.price) <= 0) {
+      alert('O preço do kit selecionado é inválido. Edite o evento no painel admin e defina um preço (número maior que zero).');
+      return;
+    }
     try {
-      const kit = getSelectedKit();
       const regId = await addRegistration({
         userId: user.id,
         raceId: race.id,
@@ -1029,15 +1034,16 @@ function RegistrationPage() {
         tshirtSize: formData.tshirtSize,
         kitId: selectedKit,
         kitName: kit?.name,
-        price: kit?.price,
+        price: Number(kit.price),
         status: 'pending_payment',
         emergencyName: formData.emergencyName,
         emergencyPhone: formData.emergencyPhone,
       });
+      if (!regId) throw new Error('Inscrição não retornou ID');
       navigate(`/pagamento/${regId}`);
     } catch (error) {
       console.error('Erro ao criar inscrição:', error);
-      alert('Erro ao criar inscrição. Tente novamente.');
+      alert(`Erro ao criar inscrição: ${error instanceof Error ? error.message : 'tente novamente'}.`);
     }
   };
 
