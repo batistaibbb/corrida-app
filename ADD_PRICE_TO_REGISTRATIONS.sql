@@ -11,3 +11,23 @@ ADD COLUMN IF NOT EXISTS kit_id TEXT;
 
 ALTER TABLE public.registrations
 ADD COLUMN IF NOT EXISTS kit_name TEXT;
+
+-- ============================================================
+-- CORREÇÃO DE DADOS: kits/distâncias com price NULL no JSON do evento.
+-- O app agora trata null com segurança, mas é recomendável popular os
+-- preços faltantes para o checkout exibir o valor correto.
+-- O bloco abaixo apenas DETECTA eventos com preços inválidos (não altera nada):
+SELECT id, name,
+  jsonb_array_elements(distances::jsonb) AS distance_item
+FROM races
+WHERE distances IS NOT NULL
+  AND (jsonb_array_elements(distances::jsonb) ->> 'price') IS NULL;
+
+SELECT id, name,
+  jsonb_array_elements(kits::jsonb) AS kit_item
+FROM races
+WHERE kits IS NOT NULL
+  AND (jsonb_array_elements(kits::jsonb) ->> 'price') IS NULL;
+
+-- Se qualquer linha retornar acima, edite o evento no painel admin e preencha
+-- o preço de cada kit/distância (ou atualize o JSON manualmente via SQL).
