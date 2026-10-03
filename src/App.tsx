@@ -9,12 +9,15 @@ import EventForm from './components/EventForm';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatusColor, canRegister } from './utils/raceStatus';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { 
   Trophy, Calendar, MapPin, Users, Star, Search, Filter, 
   User, Mail, Lock, Unlock, Eye, EyeOff, ArrowRight, ArrowLeft,
   LogOut, LayoutDashboard, CreditCard, FileText, CheckCircle,
   QrCode, Copy, Check, Shield, Download, Plus, Edit, Trash2,
-  DollarSign, AlertCircle, Phone, Home as HomeIcon, Heart, Share2, RefreshCw
+  DollarSign, AlertCircle, Phone, Home as HomeIcon, Heart, Share2, RefreshCw, X
 } from 'lucide-react';
 
 // ============ COMPONENTS ============
@@ -1073,7 +1076,6 @@ function RegistrationPage() {
                   <option value="">Gênero</option>
                   <option value="masculino">Masculino</option>
                   <option value="feminino">Feminino</option>
-                  <option value="outro">Outro</option>
                 </select>
                 <div className="flex gap-3">
                   <button onClick={() => setStep(1)} className="px-6 py-3 border rounded-xl">Voltar</button>
@@ -1180,8 +1182,7 @@ function PaymentPage() {
   const registration = registrations.find(r => r.id === registrationId);
   const race = registration ? getRaceById(registration.raceId) : null;
   const distancePrice = race?.distances.find(d => d.km === registration?.distance)?.price || 0;
-  const serviceFee = distancePrice * 0.05;
-  const total = distancePrice + serviceFee;
+  const total = distancePrice;
 
   const [selectedMethod, setSelectedMethod] = useState<'pix' | 'credit_card' | 'debit_card' | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -1201,7 +1202,7 @@ function PaymentPage() {
         registrationId: registration.id,
         method: 'pix',
         amount: distancePrice,
-        serviceFee,
+        serviceFee: 0,
         total,
         status: 'pending',
         pixCode,
@@ -1225,7 +1226,7 @@ function PaymentPage() {
         registrationId: registration.id,
         method,
         amount: distancePrice,
-        serviceFee,
+        serviceFee: 0,
         total,
         status: 'approved',
         transactionId: `MP-CARD-${Date.now()}`,
@@ -1273,7 +1274,6 @@ function PaymentPage() {
               <h2 className="font-bold mb-4">Resumo do Pedido</h2>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-gray-500">Inscrição {registration.distance}km</span><span>R$ {distancePrice.toFixed(2).replace('.', ',')}</span></div>
-                <div className="flex justify-between"><span className="text-gray-500">Taxa de serviço (5%)</span><span>R$ {serviceFee.toFixed(2).replace('.', ',')}</span></div>
                 <div className="flex justify-between pt-3 border-t font-bold text-lg"><span>Total</span><span className="text-orange-600">R$ {total.toFixed(2).replace('.', ',')}</span></div>
               </div>
             </div>
@@ -1429,7 +1429,6 @@ function ReceiptPage() {
               <div className="bg-slate-50 rounded-lg p-4 space-y-2 border border-slate-200">
                 <div className="flex justify-between text-sm"><span className="text-slate-500">Método</span><span className="font-medium text-slate-900">{payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)</span></div>
                 <div className="flex justify-between text-sm"><span className="text-slate-500">Inscrição</span><span className="text-slate-900">R$ {payment.amount.toFixed(2).replace('.', ',')}</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-500">Taxa</span><span className="text-slate-900">R$ {payment.serviceFee.toFixed(2).replace('.', ',')}</span></div>
                 <div className="flex justify-between pt-2 border-t border-slate-200"><span className="font-bold text-slate-900">Total</span><span className="font-bold text-xl text-emerald-600">R$ {payment.total.toFixed(2).replace('.', ',')}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-slate-500">Transação</span><span className="font-mono text-xs text-slate-700">{payment.transactionId}</span></div>
               </div>
@@ -1446,6 +1445,155 @@ function ReceiptPage() {
   );
 }
 
+// Funções de Exportação
+function exportToPDF(registrations: Registration[], races: Race[]) {
+  const doc = new jsPDF();
+  
+  // Título
+  doc.setFontSize(18);
+  doc.text('Relatório de Inscrições - Smart Brasil Ticket', 14, 22);
+  
+  // Data do relatório
+  doc.setFontSize(10);
+  doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")}`, 14, 30);
+  
+  // Total de inscrições
+  doc.text(`Total de inscrições: ${registrations.length}`, 14, 36);
+  
+  // Tabela de inscrições
+  const tableData = registrations.map(reg => {
+    const race = races.find(r => r.id === reg.raceId);
+    return [
+      reg.confirmationCode,
+      race?.name || 'N/A',
+      `${reg.distance}km`,
+      reg.tshirtSize || 'N/A',
+      reg.status === 'confirmed' ? 'Confirmado' : 'Pendente',
+      format(parseISO(reg.createdAt), 'dd/MM/yyyy')
+    ];
+  });
+  
+  autoTable(doc, {
+    head: [['Código', 'Evento', 'Distância', 'Camisa', 'Status', 'Data']],
+    body: tableData,
+    startY: 42,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [16, 185, 129] }
+  });
+  
+  // Salvar PDF
+  doc.save(`inscricoes-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+}
+
+function exportToExcel(registrations: Registration[], races: Race[]) {
+  const data = registrations.map(reg => {
+    const race = races.find(r => r.id === reg.raceId);
+    return {
+      'Código': reg.confirmationCode,
+      'Evento': race?.name || 'N/A',
+      'Distância': `${reg.distance}km`,
+      'Tamanho Camisa': reg.tshirtSize || 'N/A',
+      'Status': reg.status === 'confirmed' ? 'Confirmado' : 'Pendente',
+      'Data Inscrição': format(parseISO(reg.createdAt), 'dd/MM/yyyy'),
+      'Contato Emergência': reg.emergencyName || 'N/A',
+      'Telefone Emergência': reg.emergencyPhone || 'N/A'
+    };
+  });
+  
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Inscrições');
+  
+  // Salvar Excel
+  XLSX.writeFile(wb, `inscricoes-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+}
+
+// Modal de Detalhes da Inscrição
+function RegistrationDetailsModal({ registration, race, onClose }: { registration: Registration; race: Race | undefined; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50">
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl">
+          <div className="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-slate-900">Detalhes da Inscrição</h2>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+              <X className="w-5 h-5 text-slate-500" />
+            </button>
+          </div>
+          
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-500">Código de Confirmação</p>
+                <p className="font-mono font-semibold text-slate-900">{registration.confirmationCode}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-500">Status</p>
+                <span className={`px-2 py-1 text-xs font-medium rounded-full ${registration.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  {registration.status === 'confirmed' ? 'Confirmado' : 'Pendente'}
+                </span>
+              </div>
+            </div>
+            
+            <div className="border-t border-slate-200 pt-4">
+              <h3 className="font-semibold text-slate-900 mb-3">Evento</h3>
+              <div className="bg-slate-50 rounded-lg p-4">
+                <p className="font-semibold text-slate-900">{race?.name || 'N/A'}</p>
+                <p className="text-sm text-slate-600 mt-1">{race?.date && format(parseISO(race.date), "dd/MM/yyyy")} às {race?.time}</p>
+                <p className="text-sm text-slate-600">{race?.location}, {race?.city}/{race?.state}</p>
+              </div>
+            </div>
+            
+            <div className="border-t border-slate-200 pt-4">
+              <h3 className="font-semibold text-slate-900 mb-3">Inscrição</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-500">Distância</p>
+                  <p className="font-semibold text-slate-900">{registration.distance}km</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Tamanho da Camisa</p>
+                  <p className="font-semibold text-slate-900">{registration.tshirtSize || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Data da Inscrição</p>
+                  <p className="font-semibold text-slate-900">{format(parseISO(registration.createdAt), 'dd/MM/yyyy')}</p>
+                </div>
+                {registration.kitName && (
+                  <div>
+                    <p className="text-xs text-slate-500">Kit Selecionado</p>
+                    <p className="font-semibold text-slate-900">{registration.kitName}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="border-t border-slate-200 pt-4">
+              <h3 className="font-semibold text-slate-900 mb-3">Contato de Emergência</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-500">Nome</p>
+                  <p className="font-semibold text-slate-900">{registration.emergencyName || 'N/A'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Telefone</p>
+                  <p className="font-semibold text-slate-900">{registration.emergencyPhone || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="border-t border-slate-200 px-6 py-4 flex justify-end">
+            <button onClick={onClose} className="px-6 py-2.5 bg-slate-900 text-white font-medium rounded-lg hover:bg-slate-800 transition-colors">
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminDashboard() {
   const { user, logout } = useAuth();
   const { races, registrations, payments, getStats, addRace, updateRace, deleteRace, approvePayment } = useData();
@@ -1453,6 +1601,7 @@ function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'events' | 'registrations' | 'payments'>('dashboard');
   const [showForm, setShowForm] = useState(false);
   const [editingRace, setEditingRace] = useState<Race | null>(null);
+  const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
   const stats = getStats();
 
   const handleLogout = () => { logout(); navigate('/'); };
@@ -1583,15 +1732,35 @@ function AdminDashboard() {
 
         {activeTab === 'registrations' && (
           <div>
-            <h1 className="text-2xl font-bold mb-6">Inscrições</h1>
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-2xl font-bold">Inscrições</h1>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => exportToPDF(registrations, races)}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  Exportar PDF
+                </button>
+                <button
+                  onClick={() => exportToExcel(registrations, races)}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  Exportar Excel
+                </button>
+              </div>
+            </div>
             <div className="bg-white rounded-xl shadow-sm overflow-hidden">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Código</th>
+                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Participante</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Evento</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Distância</th>
                     <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -1600,9 +1769,23 @@ function AdminDashboard() {
                     return (
                       <tr key={reg.id}>
                         <td className="px-6 py-4 font-mono text-sm">{reg.confirmationCode}</td>
+                        <td className="px-6 py-4 text-sm font-medium text-slate-900">
+                          {reg.userId === 'user-001' ? 'João Pereira' : 
+                           reg.userId === 'user-002' ? 'Maria Silva' : 
+                           `Participante ${reg.userId.slice(-4)}`}
+                        </td>
                         <td className="px-6 py-4 text-sm">{race?.name}</td>
                         <td className="px-6 py-4 text-sm">{reg.distance}km</td>
                         <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{reg.status === 'confirmed' ? 'Confirmado' : 'Pendente'}</span></td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => setSelectedRegistration(reg)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                            title="Ver detalhes"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -1670,6 +1853,14 @@ function AdminDashboard() {
             }
           }}
           onClose={() => { setShowForm(false); setEditingRace(null); }}
+        />
+      )}
+
+      {selectedRegistration && (
+        <RegistrationDetailsModal
+          registration={selectedRegistration}
+          race={races.find(r => r.id === selectedRegistration.raceId)}
+          onClose={() => setSelectedRegistration(null)}
         />
       )}
     </div>
