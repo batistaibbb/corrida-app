@@ -28,6 +28,24 @@ interface MercadoPagoWebhook {
   user_id: string;
 }
 
+// Normaliza o ID do pagamento a partir dos vários formatos que o Mercado Pago
+// envia (webhook clássico, x-format v3.1 com topic/resource, query params de
+// notificações antigas tipo ?type=payment&data.id=...).
+function extractPaymentId(body: any, url: URL): string | null {
+  const topic = body?.type || body?.topic || url.searchParams.get("type") || url.searchParams.get("topic");
+  const resourceId =
+    body?.data?.id ||
+    body?.resource ||
+    url.searchParams.get("data.id") ||
+    url.searchParams.get("id");
+  // Só processamos tópicos de pagamento (checkout pro também usa "payment")
+  if (topic && !String(topic).includes("payment")) return null;
+  if (!resourceId) return null;
+  // Tópicos como merchant_order podem não ser payment id — ignoramos por segurança
+  if (topic && topic !== "payment" && topic !== "payments") return null;
+  return String(resourceId);
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -35,12 +53,15 @@ serve(async (req) => {
   }
 
   try {
-    const body: MercadoPagoWebhook = await req.json();
-    console.log("Webhook received:", body);
+    const rawBody = await req.text();
+    let body: any = {};
+    try { body = JSON.parse(rawBody); } catch { /* corpo pode vir vazio em notificações por query string */ }
+    console.log("Webhook received:", body, req.url);
 
-    // Only process payment notifications
-    if (body.type !== "payment") {
-      return new Response(JSON.stringify({ received: true }), {
+    const url = new URL(req.url);
+    const paymentId = extractPaymentId(body, url);
+    if (!paymentId) {
+      return new Response(JSON.stringify({ received: true, ignored: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
@@ -54,7 +75,6 @@ serve(async (req) => {
 
     // Get payment details from Mercado Pago API
     const mercadopagoAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-    const paymentId = body.data.id;
 
     const mpResponse = await fetch(
       `https://api.mercadopago.com/v1/payments/${paymentId}`,
@@ -74,7 +94,7 @@ serve(async (req) => {
     console.log("Payment details:", payment);
 
     // Find payment record by Mercado Pago payment ID
-    const { data: paymentRecord, error: paymentError } = await supabase
+    let { data: paymentRecord, error: paymentError } = await supabase
       .from("payments")
       .select(`
         id,
@@ -82,40 +102,55 @@ serve(async (req) => {
         registrations!inner (
           id,
           user_id,
-          race_id,
-          profiles!inner (
-            id,
-            email,
-            name
-          )
+          race_id
         )
       `)
       .eq("mercadopago_payment_id", paymentId)
-      .single();
+      .maybeSingle();
 
     if (paymentError || !paymentRecord) {
-      console.error("Payment record not found:", paymentError);
-      // Try to find by external_reference (confirmation code)
+      console.warn("Payment record not found by MP id:", paymentError);
+      // Fallback 1: localizar a inscrição pelo external_reference (código de confirmação)
       const externalRef = payment.external_reference;
       if (externalRef) {
         const { data: regByCode } = await supabase
           .from("registrations")
           .select("id, user_id, race_id")
           .eq("confirmation_code", externalRef)
-          .single();
+          .maybeSingle();
 
         if (regByCode) {
-          // Update payment with Mercado Pago ID
-          await supabase
+          // Atualiza o pagamento existente com o ID do MP e segue o fluxo normal
+          const { data: updated } = await supabase
             .from("payments")
             .update({ mercadopago_payment_id: paymentId })
-            .eq("registration_id", regByCode.id);
+            .eq("registration_id", regByCode.id)
+            .select("id, registration_id")
+            .maybeSingle();
+          if (updated) paymentRecord = updated;
         }
       }
-      return new Response(JSON.stringify({ received: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
+
+      // Fallback 2: localizar pelo ID da inscrição enviado como item.id na preferência
+      if (!paymentRecord) {
+        const itemId = payment?.items?.[0]?.id || payment?.additional_info?.items?.[0]?.id;
+        if (itemId && /^[0-9a-fA-F-]{36}$/.test(itemId)) {
+          const { data: updated } = await supabase
+            .from("payments")
+            .update({ mercadopago_payment_id: paymentId })
+            .eq("registration_id", itemId)
+            .select("id, registration_id")
+            .maybeSingle();
+          if (updated) paymentRecord = updated;
+        }
+      }
+
+      if (!paymentRecord) {
+        return new Response(JSON.stringify({ received: true, unmatched: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
     }
 
     // Update payment status based on Mercado Pago status
@@ -142,12 +177,13 @@ serve(async (req) => {
         newStatus = "pending";
     }
 
-    // Update payment record
+    // Update payment record (inclui o ID real do MP para rastreabilidade)
     const { error: updateError } = await supabase
       .from("payments")
       .update({
         status: newStatus,
         paid_at: paidAt,
+        mercadopago_payment_id: String(paymentId),
         updated_at: new Date().toISOString(),
       })
       .eq("id", paymentRecord.id);
@@ -176,15 +212,17 @@ serve(async (req) => {
       // await sendConfirmationEmail(paymentRecord.registrations.profiles.email, ...);
     }
 
-    // If rejected, cancel the registration
-    if (newStatus === "rejected") {
+    // Se rejeitado/cancelado/expirado, marca a inscrição como cancelada.
+    // Pagamentos pendentes (ex.: PIX aguardando) NÃO alteram a inscrição.
+    if (newStatus === "rejected" || newStatus === "refunded") {
       await supabase
         .from("registrations")
         .update({
           status: "cancelled",
           updated_at: new Date().toISOString(),
         })
-        .eq("id", paymentRecord.registration_id);
+        .eq("id", paymentRecord.registration_id)
+        .neq("status", "confirmed");
     }
 
     return new Response(JSON.stringify({ received: true, status: newStatus }), {

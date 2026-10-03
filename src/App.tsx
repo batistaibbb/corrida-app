@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider, useData } from './contexts/DataContext';
-import { useState, useEffect, Component, ReactNode } from 'react';
+import { useState, useEffect, useRef, Component, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
 import { supabase, isDemoMode } from './lib/supabase';
 import DiagnosticPage from './pages/DiagnosticPage';
@@ -1068,6 +1068,12 @@ function RegistrationPage() {
         status: 'pending_payment',
         emergencyName: formData.emergencyName,
         emergencyPhone: formData.emergencyPhone,
+        // Dados do participante persistidos na inscrição (relatório admin)
+        participantFirstName: formData.firstName,
+        participantLastName: formData.lastName,
+        participantEmail: formData.email,
+        participantPhone: formData.phone,
+        participantCpf: formData.cpf,
       });
       if (!regId) throw new Error('Inscrição não retornou ID');
       navigate(`/pagamento/${regId}`);
@@ -1293,6 +1299,11 @@ function PaymentPage() {
             createdAt: data.created_at ?? data.createdAt,
             emergencyName: data.emergency_name ?? data.emergencyName ?? '',
             emergencyPhone: data.emergency_phone ?? data.emergencyPhone ?? '',
+            participantFirstName: data.participant_first_name ?? undefined,
+            participantLastName: data.participant_last_name ?? undefined,
+            participantEmail: data.participant_email ?? undefined,
+            participantPhone: data.participant_phone ?? undefined,
+            participantCpf: data.participant_cpf ?? undefined,
           });
         }
       } catch (err) {
@@ -1370,6 +1381,144 @@ function PaymentPage() {
   const [copied, setCopied] = useState(false);
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [cardData, setCardData] = useState({ number: '', name: '', expiry: '', cvv: '', installments: '1' });
+  // Integração Mercado Pago (Checkout Pro): estado da confirmação automática de pagamento
+  const [mpError, setMpError] = useState<string | null>(null);
+  const [mpConfirming, setMpConfirming] = useState(false);
+  const mpPollRef = useRef<number | null>(null);
+
+  useEffect(() => () => { if (mpPollRef.current) window.clearInterval(mpPollRef.current); }, []);
+
+  // ============================================
+  // CONFIRMAÇÃO AUTOMÁTICA DE PAGAMENTO (Mercado Pago)
+  // ============================================
+  // Camada 1: webhook mercadopago-webhook atualiza payments/registrations no banco.
+  // Camada 2: ao voltar do checkout (?status=approved), confirmamos direto na API
+  //           do MP e gravamos no banco caso o webhook ainda não tenha chegado.
+  // Camada 3: polling no banco (Supabase Realtime em payments já recarrega a lista,
+  //           mas aqui consultamos explicitamente) até status != pending.
+  const syncRegistrationStatus = async () => {
+    try {
+      const { data } = await supabase!
+        .from('registrations')
+        .select('id, status, payment_id')
+        .eq('id', registration!.id)
+        .maybeSingle();
+      if (data?.status === 'confirmed') {
+        navigate(`/comprovante/${registration!.id}`);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const startStatusPolling = () => {
+    if (mpPollRef.current) window.clearInterval(mpPollRef.current);
+    let attempts = 0;
+    mpPollRef.current = window.setInterval(async () => {
+      attempts += 1;
+      if (attempts > 45) { if (mpPollRef.current) window.clearInterval(mpPollRef.current); return; } // ~90s
+      const done = await syncRegistrationStatus();
+      if (done && mpPollRef.current) window.clearInterval(mpPollRef.current);
+    }, 2000);
+  };
+
+  // Confirmação server-side via Edge Function (usa token seguro, sem expor credenciais)
+  const confirmCheckoutPayment = async (mpPaymentId: string) => {
+    const { data: sessionData } = await supabase!.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-checkout-payment`;
+    const res = await fetch(fnUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+        'x-app-url': window.location.origin,
+      },
+      body: JSON.stringify({ registrationId: registration!.id, mpPaymentId }),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json?.error) throw new Error(json?.error || `HTTP ${res.status}`);
+    return json;
+  };
+
+  // Detecta retorno do checkout do Mercado Pago (?status=...&collection_id=.../&payment_id=...)
+  useEffect(() => {
+    if (isDemoMode || !supabase || !registration) return;
+    const params = new URLSearchParams(window.location.search);
+    const st = params.get('status');
+    if (!st) return;
+    const collectionId = params.get('collection_id') || params.get('payment_id') || params.get('collector_id');
+
+    // Limpa a query string para não reprocessar ao recarregar
+    const cleanUrl = window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+
+    (async () => {
+      setMpConfirming(true);
+      setMpError(null);
+      try {
+        if (st === 'approved' && collectionId) {
+          try {
+            await confirmCheckoutPayment(collectionId);
+          } catch (err: any) {
+            console.warn('Confirmação direta falhou, dependendo do webhook:', err);
+          }
+        }
+        // Verifica o status final no banco (webhook pode ter confirmado antes)
+        const confirmed = await syncRegistrationStatus();
+        if (!confirmed) {
+          if (st === 'approved') {
+            // Webhook ainda não chegou — aguarda via polling
+            startStatusPolling();
+          } else if (st === 'rejected' || st === 'failure') {
+            setMpError('O pagamento foi recusado ou cancelado. Você pode tentar novamente com outra forma de pagamento.');
+          } else {
+            // pending (PIX/cartão em processamento)
+            setMpError('Pagamento em processamento. Assim que for aprovado, sua inscrição é confirmada automaticamente — esta página atualiza sozinha.');
+            startStatusPolling();
+          }
+        }
+      } finally {
+        setMpConfirming(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [registration]);
+
+  // ============================================
+  // INICIAR CHECKOUT MERCADO PAGO (produção)
+  // ============================================
+  const startMercadoPagoCheckout = async () => {
+    setProcessing(true);
+    setMpError(null);
+    try {
+      const { data: sessionData } = await supabase!.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-payment`;
+      const res = await fetch(fnUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+          'x-app-url': window.location.origin,
+        },
+        body: JSON.stringify({ registrationId: registration!.id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.error || !json?.checkoutUrl) {
+        throw new Error(json?.error || `Falha ao iniciar checkout (HTTP ${res.status})`);
+      }
+      // Redireciona para o checkout oficial do Mercado Pago.
+      // Ao concluir, o MP devolve o usuário para /pagamento/:id?status=... e o
+      // webhook atualiza o banco automaticamente em paralelo.
+      window.location.href = json.checkoutUrl;
+    } catch (err: any) {
+      setMpError(err?.message || 'Não foi possível iniciar o pagamento. Tente novamente.');
+      setProcessing(false);
+    }
+  };
 
   // Enquanto o fallback de busca está em andamento, mostra carregamento (evita
   // "piscar" a tela de erro e depois sumir).
@@ -1528,7 +1677,21 @@ function PaymentPage() {
 
             {!pixGenerated ? (
               <div className="bg-white rounded-xl p-6 shadow-sm">
+                {mpConfirming && (
+                  <div className="mb-4 flex items-center gap-3 p-4 bg-sky-50 border border-sky-200 rounded-xl">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-sky-600"></div>
+                    <p className="text-sm text-sky-800 font-medium">Confirmando seu pagamento junto ao Mercado Pago...</p>
+                  </div>
+                )}
+                {mpError && (
+                  <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                    <p className="text-sm text-amber-800">{mpError}</p>
+                  </div>
+                )}
                 <h2 className="font-bold mb-4">Forma de Pagamento</h2>
+
+                {isDemoMode ? (
+                  <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                   <button onClick={() => setSelectedMethod('pix')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'pix' ? 'border-orange-500 bg-orange-50' : 'border-gray-200'}`}>
                     <QrCode className={`w-5 h-5 mb-2 ${selectedMethod === 'pix' ? 'text-orange-600' : 'text-gray-500'}`} />
@@ -1569,6 +1732,33 @@ function PaymentPage() {
                       {processing ? 'Processando...' : `Pagar R$ ${formatBRL(total)}`}
                     </button>
                   </div>
+                )}
+                  </>
+                ) : (
+                  <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                  <button onClick={() => setSelectedMethod('pix')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'pix' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
+                    <QrCode className={`w-5 h-5 mb-2 ${selectedMethod === 'pix' ? 'text-emerald-600' : 'text-gray-500'}`} />
+                    <p className="font-bold text-sm">PIX</p>
+                    <p className="text-xs text-gray-500">Aprovação instantânea via Mercado Pago</p>
+                  </button>
+                  <button onClick={() => setSelectedMethod('credit_card')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'credit_card' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
+                    <CreditCard className={`w-5 h-5 mb-2 ${selectedMethod === 'credit_card' ? 'text-emerald-600' : 'text-gray-500'}`} />
+                    <p className="font-bold text-sm">Cartão de Crédito</p>
+                    <p className="text-xs text-gray-500">Até 12x — checkout seguro Mercado Pago</p>
+                  </button>
+                </div>
+
+                {selectedMethod && (
+                  <button onClick={startMercadoPagoCheckout} disabled={processing || mpConfirming} className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 hover:from-emerald-700 hover:to-sky-700 transition-all">
+                    <Shield className="w-4 h-4" />
+                    {processing ? 'Redirecionando para o Mercado Pago...' : `Pagar R$ ${formatBRL(total)} com ${selectedMethod === 'pix' ? 'PIX' : 'Cartão'}`}
+                  </button>
+                )}
+                <p className="text-xs text-slate-400 mt-3 text-center">
+                  Você será redirecionado para o ambiente seguro do Mercado Pago. Ao concluir, volta automaticamente e a inscrição é confirmada sem ação manual.
+                </p>
+                  </>
                 )}
               </div>
             ) : (
@@ -1644,6 +1834,11 @@ function ReceiptPage() {
             createdAt: data.created_at ?? data.createdAt,
             emergencyName: data.emergency_name ?? data.emergencyName ?? '',
             emergencyPhone: data.emergency_phone ?? data.emergencyPhone ?? '',
+            participantFirstName: data.participant_first_name ?? undefined,
+            participantLastName: data.participant_last_name ?? undefined,
+            participantEmail: data.participant_email ?? undefined,
+            participantPhone: data.participant_phone ?? undefined,
+            participantCpf: data.participant_cpf ?? undefined,
           });
         }
       } catch (err) {
@@ -1864,6 +2059,35 @@ function ReceiptPage() {
   );
 }
 
+// Helpers do relatório: nome/contato do participante com fallbacks
+// (inscrições antigas não têm os campos persistidos; tenta o perfil demo)
+function getParticipantName(reg: Registration): string {
+  const full = [reg.participantFirstName, reg.participantLastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  if (full) return full;
+  if (reg.userId === 'user-001') return 'João Pereira';
+  if (reg.userId === 'user-002') return 'Maria Silva';
+  return '-';
+}
+
+function getParticipantPhone(reg: Registration): string {
+  return reg.participantPhone || '-';
+}
+
+function getParticipantEmail(reg: Registration): string {
+  return reg.participantEmail || '-';
+}
+
+function getParticipantCpf(reg: Registration): string {
+  return reg.participantCpf || '-';
+}
+
+function getKitLabel(reg: Registration): string {
+  return reg.kitName || '-';
+}
+
 // Funções de Exportação
 function exportToPDF(registrations: Registration[], races: Race[]) {
   const doc = new jsPDF();
@@ -1879,12 +2103,16 @@ function exportToPDF(registrations: Registration[], races: Race[]) {
   // Total de inscrições
   doc.text(`Total de inscrições: ${registrations.length}`, 14, 36);
   
-  // Tabela de inscrições
+  // Tabela de inscrições (participante + kit para controle de distribuição)
   const tableData = registrations.map(reg => {
     const race = races.find(r => r.id === reg.raceId);
     return [
       reg.confirmationCode,
+      getParticipantName(reg),
+      getParticipantPhone(reg),
+      getParticipantCpf(reg),
       race?.name || 'N/A',
+      getKitLabel(reg),
       `${reg.distance}km`,
       reg.tshirtSize || 'N/A',
       reg.status === 'confirmed' ? 'Confirmado' : 'Pendente',
@@ -1893,10 +2121,10 @@ function exportToPDF(registrations: Registration[], races: Race[]) {
   });
   
   autoTable(doc, {
-    head: [['Código', 'Evento', 'Distância', 'Camisa', 'Status', 'Data']],
+    head: [['Código', 'Participante', 'Telefone', 'CPF', 'Evento', 'Kit', 'Distância', 'Camisa', 'Status', 'Data']],
     body: tableData,
     startY: 42,
-    styles: { fontSize: 8 },
+    styles: { fontSize: 7 },
     headStyles: { fillColor: [16, 185, 129] }
   });
   
@@ -1909,7 +2137,13 @@ function exportToExcel(registrations: Registration[], races: Race[]) {
     const race = races.find(r => r.id === reg.raceId);
     return {
       'Código': reg.confirmationCode,
+      'Participante': getParticipantName(reg),
+      'Telefone': getParticipantPhone(reg),
+      'E-mail': getParticipantEmail(reg),
+      'CPF': getParticipantCpf(reg),
       'Evento': race?.name || 'N/A',
+      'Kit Escolhido': getKitLabel(reg),
+      'Valor (R$)': toSafeNumber(reg.price),
       'Distância': `${reg.distance}km`,
       'Tamanho Camisa': reg.tshirtSize || 'N/A',
       'Status': reg.status === 'confirmed' ? 'Confirmado' : 'Pendente',
@@ -1964,6 +2198,28 @@ function RegistrationDetailsModal({ registration, race, onClose }: { registratio
             </div>
             
             <div className="border-t border-slate-200 pt-4">
+              <h3 className="font-semibold text-slate-900 mb-3">Participante</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-500">Nome</p>
+                  <p className="font-semibold text-slate-900">{getParticipantName(registration)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Telefone</p>
+                  <p className="font-semibold text-slate-900">{getParticipantPhone(registration)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">E-mail</p>
+                  <p className="font-semibold text-slate-900">{getParticipantEmail(registration)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">CPF</p>
+                  <p className="font-semibold text-slate-900">{getParticipantCpf(registration)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 pt-4">
               <h3 className="font-semibold text-slate-900 mb-3">Inscrição</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1978,12 +2234,14 @@ function RegistrationDetailsModal({ registration, race, onClose }: { registratio
                   <p className="text-xs text-slate-500">Data da Inscrição</p>
                   <p className="font-semibold text-slate-900">{format(parseISO(registration.createdAt), 'dd/MM/yyyy')}</p>
                 </div>
-                {registration.kitName && (
-                  <div>
-                    <p className="text-xs text-slate-500">Kit Selecionado</p>
-                    <p className="font-semibold text-slate-900">{registration.kitName}</p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-xs text-slate-500">Kit Selecionado</p>
+                  <p className="font-semibold text-slate-900">{registration.kitName || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Valor da Inscrição</p>
+                  <p className="font-semibold text-slate-900">R$ {formatBRL(registration.price)}</p>
+                </div>
               </div>
             </div>
             
@@ -2021,9 +2279,30 @@ function AdminDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [editingRace, setEditingRace] = useState<Race | null>(null);
   const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
+  // Filtros da aba de Inscrições (relatório)
+  const [regFilterRace, setRegFilterRace] = useState<string>('all');
+  const [regFilterStatus, setRegFilterStatus] = useState<string>('all');
+  const [regSearch, setRegSearch] = useState<string>('');
   const stats = getStats();
 
   const handleLogout = () => { logout(); navigate('/'); };
+
+  // Lista filtrada de inscrições para tabela e exportações do relatório
+  const filteredRegistrations = registrations.filter(reg => {
+    if (regFilterRace !== 'all' && reg.raceId !== regFilterRace) return false;
+    if (regFilterStatus === 'confirmed' && reg.status !== 'confirmed') return false;
+    if (regFilterStatus === 'pending' && reg.status === 'confirmed') return false;
+    if (regSearch.trim()) {
+      const q = regSearch.trim().toLowerCase();
+      const raceName = (races.find(r => r.id === reg.raceId)?.name || '').toLowerCase();
+      const haystack = [
+        getParticipantName(reg), getParticipantPhone(reg), getParticipantEmail(reg),
+        getParticipantCpf(reg), reg.confirmationCode, reg.kitName || '', raceName,
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -2155,14 +2434,14 @@ function AdminDashboard() {
               <h1 className="text-2xl font-bold">Inscrições</h1>
               <div className="flex gap-2">
                 <button
-                  onClick={() => exportToPDF(registrations, races)}
+                  onClick={() => exportToPDF(filteredRegistrations, races)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
                 >
                   <FileText className="w-4 h-4" />
                   Exportar PDF
                 </button>
                 <button
-                  onClick={() => exportToExcel(registrations, races)}
+                  onClick={() => exportToExcel(filteredRegistrations, races)}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
                 >
                   <Download className="w-4 h-4" />
@@ -2170,33 +2449,81 @@ function AdminDashboard() {
                 </button>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <table className="w-full">
+
+            {/* Filtros do relatório */}
+            <div className="bg-white rounded-xl p-4 shadow-sm mb-4 flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={regSearch}
+                  onChange={(e) => setRegSearch(e.target.value)}
+                  placeholder="Buscar por nome, telefone, CPF, e-mail, código ou kit..."
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <select
+                value={regFilterRace}
+                onChange={(e) => setRegFilterRace(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">Todos os eventos</option>
+                {races.map(race => (
+                  <option key={race.id} value={race.id}>{race.name}</option>
+                ))}
+              </select>
+              <select
+                value={regFilterStatus}
+                onChange={(e) => setRegFilterStatus(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">Todos os status</option>
+                <option value="confirmed">Confirmados</option>
+                <option value="pending">Pendentes</option>
+              </select>
+              <span className="text-sm text-gray-500 whitespace-nowrap">
+                {filteredRegistrations.length} de {registrations.length} inscrições
+              </span>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+              <table className="w-full min-w-[900px]">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Código</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Participante</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Evento</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Distância</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Ações</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Código</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Participante</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Telefone</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Evento</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Kit</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Camisa</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {registrations.map(reg => {
+                  {filteredRegistrations.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500">
+                        Nenhuma inscrição encontrada com os filtros selecionados.
+                      </td>
+                    </tr>
+                  ) : filteredRegistrations.map(reg => {
                     const race = races.find(r => r.id === reg.raceId);
                     return (
                       <tr key={reg.id}>
-                        <td className="px-6 py-4 font-mono text-sm">{reg.confirmationCode}</td>
-                        <td className="px-6 py-4 text-sm font-medium text-slate-900">
-                          {reg.userId === 'user-001' ? 'João Pereira' : 
-                           reg.userId === 'user-002' ? 'Maria Silva' : 
-                           `Participante ${reg.userId.slice(-4)}`}
+                        <td className="px-4 py-4 font-mono text-sm">{reg.confirmationCode}</td>
+                        <td className="px-4 py-4 text-sm font-medium text-slate-900">
+                          {getParticipantName(reg)}
+                          {reg.participantEmail && (
+                            <p className="text-xs font-normal text-gray-500">{reg.participantEmail}</p>
+                          )}
                         </td>
-                        <td className="px-6 py-4 text-sm">{race?.name}</td>
-                        <td className="px-6 py-4 text-sm">{reg.distance}km</td>
-                        <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{reg.status === 'confirmed' ? 'Confirmado' : 'Pendente'}</span></td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-4 py-4 text-sm">{getParticipantPhone(reg)}</td>
+                        <td className="px-4 py-4 text-sm">{race?.name || 'N/A'}</td>
+                        <td className="px-4 py-4 text-sm">{reg.kitName || '-'}</td>
+                        <td className="px-4 py-4 text-sm">{reg.tshirtSize || 'N/A'}</td>
+                        <td className="px-4 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{reg.status === 'confirmed' ? 'Confirmado' : 'Pendente'}</span></td>
+                        <td className="px-4 py-4 text-right">
                           <button
                             onClick={() => setSelectedRegistration(reg)}
                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
