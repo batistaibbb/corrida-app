@@ -1575,15 +1575,25 @@ function PaymentPage() {
         accessToken = sessionRes?.data?.session?.access_token;
       } catch { /* segue com anon key */ }
 
-      const res = await fetch(`${supabaseUrl}/functions/v1/create-checkout-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken || anonKey}`,
-          'x-app-url': window.location.origin,
-        },
-        body: JSON.stringify({ registrationId: registration!.id }),
-      });
+      let res: Response;
+      try {
+        res = await fetch(`${supabaseUrl}/functions/v1/create-checkout-payment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken || anonKey}`,
+            'x-app-url': window.location.origin,
+          },
+          body: JSON.stringify({ registrationId: registration!.id }),
+        });
+      } catch {
+        // fetch só lança exceção quando a requisição NEM SAI do navegador
+        // (domínio errado/inexistente, DNS, rede ou CORS). Mostra diagnóstico claro.
+        throw new Error(
+          `Não foi possível conectar ao servidor de pagamentos (${supabaseUrl || 'VITE_SUPABASE_URL vazio'}). ` +
+          'Verifique se as Edge Functions estão ativas no Supabase.'
+        );
+      }
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.error || !json?.checkoutUrl) {
         throw new Error(json?.error || `Falha ao iniciar checkout no Mercado Pago (HTTP ${res.status})`);
@@ -1593,7 +1603,12 @@ function PaymentPage() {
       // webhook atualiza o banco automaticamente em paralelo.
       window.location.href = json.checkoutUrl;
     } catch (err: any) {
-      setMpError(err?.message || 'Não foi possível iniciar o pagamento. Tente novamente.');
+      const msg = typeof err?.message === 'string' && err.message.trim()
+        ? err.message
+        : 'Não foi possível iniciar o pagamento. Tente novamente.';
+      setMpError(msg);
+      // Log completo para diagnóstico no console (F12)
+      console.error('[MercadoPago] Erro ao criar checkout:', err);
       setProcessing(false);
     }
   };
