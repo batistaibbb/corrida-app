@@ -99,6 +99,7 @@ function convertRegistrationFromSupabase(reg: any): Registration {
     tshirtSize: reg.tshirt_size || reg.tshirtSize,
     kitId: reg.kit_id || reg.kitId,
     kitName: reg.kit_name || reg.kitName,
+    price: reg.price ?? reg.price,
     status: reg.status,
     paymentId: reg.payment_id || reg.paymentId,
     confirmationCode: reg.confirmation_code || reg.confirmationCode,
@@ -416,6 +417,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // Adicionar kit se selecionado
       if (reg.kitId) insertData.kit_id = reg.kitId;
       if (reg.kitName) insertData.kit_name = reg.kitName;
+      // Persistir o preço do kit escolhido para o fluxo de pagamento
+      if (reg.price !== undefined) insertData.price = reg.price;
       
       const { data, error } = await supabase
         .from('registrations')

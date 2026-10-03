@@ -1,8 +1,9 @@
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider, useData } from './contexts/DataContext';
-import { useState, ReactNode } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
+import { supabase, isDemoMode } from './lib/supabase';
 import DiagnosticPage from './pages/DiagnosticPage';
 import TestSupabase from './pages/TestSupabase';
 import EventForm from './components/EventForm';
@@ -987,6 +988,7 @@ function RegistrationPage() {
         tshirtSize: formData.tshirtSize,
         kitId: selectedKit,
         kitName: kit?.name,
+        price: kit?.price,
         status: 'pending_payment',
         emergencyName: formData.emergencyName,
         emergencyPhone: formData.emergencyPhone,
@@ -1179,9 +1181,34 @@ function PaymentPage() {
   const { user } = useAuth();
   const { registrations, getRaceById, addPayment, updateRegistration } = useData();
   const navigate = useNavigate();
-  const registration = registrations.find(r => r.id === registrationId);
+  // Fallback: se a inscrição ainda não estiver na lista em memória (ex.: recarregamento
+  // da página antes do refresh dos dados), busca direto no Supabase para evitar tela em branco.
+  const [fetchedRegistration, setFetchedRegistration] = useState<Registration | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchFallback() {
+      if (registrations.some(r => r.id === registrationId) || !registrationId || isDemoMode || !supabase) return;
+      try {
+        const { data } = await supabase
+          .from('registrations')
+          .select('*')
+          .eq('id', registrationId)
+          .maybeSingle();
+        if (!cancelled && data) setFetchedRegistration(data);
+      } catch (err) {
+        console.error('Erro ao buscar inscrição:', err);
+      }
+    }
+    fetchFallback();
+    return () => { cancelled = true; };
+  }, [registrationId, registrations]);
+
+  const registration = registrations.find(r => r.id === registrationId) || fetchedRegistration;
   const race = registration ? getRaceById(registration.raceId) : null;
-  const distancePrice = race?.distances.find(d => d.km === registration?.distance)?.price || 0;
+  // Preço vem do kit selecionado na inscrição; distances é apenas fallback
+  const kitPrice = registration?.price || (race?.kits?.find(k => k.id === registration?.kitId)?.price ?? 0);
+  const distancePrice = kitPrice || race?.distances?.find(d => d.km === registration?.distance)?.price || 0;
   const total = distancePrice;
 
   const [selectedMethod, setSelectedMethod] = useState<'pix' | 'credit_card' | 'debit_card' | null>(null);
@@ -1191,7 +1218,20 @@ function PaymentPage() {
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [cardData, setCardData] = useState({ number: '', name: '', expiry: '', cvv: '', installments: '1' });
 
-  if (!registration || !race || !user) return <div className="text-center py-20">Dados inválidos</div>;
+  if (!registration || !race || !user) {
+    // Em vez de sumir a tela, mostra um estado claro com ação de voltar
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="font-bold text-slate-900 mb-1">Não encontramos sua inscrição</p>
+          <p className="text-sm text-slate-500 mb-4">Pode ser que ela ainda não tenha sincronizado. Volte e tente novamente.</p>
+          <button onClick={() => navigate(-1)} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+            Voltar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const pixCode = `00020126580014br.gov.bcb.pix0136${registration.confirmationCode}520400005303986540${total.toFixed(2)}5802BR5925SMARTBRASIL6009SAO PAULO6304ABCD`;
 
@@ -1364,7 +1404,30 @@ function ReceiptPage() {
   const { user } = useAuth();
   const { registrations, getRaceById, getPaymentByRegistration } = useData();
   const navigate = useNavigate();
-  const registration = registrations.find(r => r.id === registrationId);
+  // Fallback: se a inscrição ainda não está na lista (ex.: recarregou antes do refresh),
+  // tenta buscá-la direto no Supabase para evitar tela em branco.
+  const [fetchedRegistration, setFetchedRegistration] = useState<Registration | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchFallback() {
+      if (registrations.some(r => r.id === registrationId) || !registrationId || isDemoMode || !supabase) return;
+      try {
+        const { data } = await supabase
+          .from('registrations')
+          .select('*')
+          .eq('id', registrationId)
+          .maybeSingle();
+        if (!cancelled && data) setFetchedRegistration(data);
+      } catch (err) {
+        console.error('Erro ao buscar inscrição:', err);
+      }
+    }
+    fetchFallback();
+    return () => { cancelled = true; };
+  }, [registrationId, registrations]);
+
+  const registration = registrations.find(r => r.id === registrationId) || fetchedRegistration;
   const race = registration ? getRaceById(registration.raceId) : null;
   const payment = registration ? getPaymentByRegistration(registration.id) : null;
 
