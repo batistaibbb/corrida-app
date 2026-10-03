@@ -95,6 +95,7 @@ export interface Registration {
   tshirtSize: string;
   kitId?: string; // ID do kit selecionado
   kitName?: string; // Nome do kit selecionado
+  price?: number; // Preço cobrado (preço do kit escolhido)
   status: 'pending_payment' | 'confirmed' | 'cancelled';
   paymentId?: string;
   confirmationCode: string;
