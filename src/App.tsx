@@ -1698,13 +1698,105 @@ function ReceiptPage() {
   }
 
   const handleDownload = () => {
-    const content = `COMPROVANTE DE INSCRIÇÃO - SMART BRASIL TICKET\n\nCódigo: ${registration.confirmationCode}\n\nEVENTO\n${race.name}\nData: ${format(parseISO(race.date), "dd/MM/yyyy")}\nLocal: ${race.location}, ${race.city}/${race.state}\n\nINSCRITO\nNome: ${user.name}\nCPF: ${user.cpf}\n\nINSCRIÇÃO\nDistância: ${registration.distance}km\nCamiseta: Tam. ${registration.tshirtSize}\n\nPAGAMENTO\nMétodo: ${payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)\nTotal: R$ ${formatBRL(payment.total)}\nStatus: APROVADO\nTransação: ${payment.transactionId}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `comprovante-${registration.confirmationCode}.txt`;
-    a.click();
+    // Gera o comprovante em PDF (jsPDF já incluído no projeto)
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const marginX = 20;
+    let y = 0;
+
+    // Cabeçalho com gradiente (faixa sólida em verde)
+    doc.setFillColor(5, 150, 105); // emerald-600
+    doc.rect(0, 0, pageW, 32, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SMART BRASIL TICKET', pageW / 2, 14, { align: 'center' });
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Comprovante de Inscrição Confirmada', pageW / 2, 23, { align: 'center' });
+
+    y = 44;
+
+    // Status de confirmação
+    doc.setTextColor(5, 150, 105);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PAGAMENTO CONFIRMADO', pageW / 2, y, { align: 'center' });
+    y += 10;
+
+    // Código de confirmação
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Código de Confirmação', pageW / 2, y, { align: 'center' });
+    y += 7;
+    doc.setFontSize(16);
+    doc.setFont('courier', 'bold');
+    doc.text(registration.confirmationCode || '-', pageW / 2, y, { align: 'center' });
+    y += 10;
+
+    doc.setDrawColor(203, 213, 225);
+    doc.line(marginX, y, pageW - marginX, y);
+    y += 10;
+
+    const sectionTitle = (title: string) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(5, 150, 105);
+      doc.text(title.toUpperCase(), marginX, y);
+      y += 7;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(51, 65, 85);
+    };
+    const row = (label: string, value: string) => {
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${label}:`, marginX, y);
+      doc.setTextColor(30, 41, 59);
+      doc.text(value || '-', marginX + 45, y);
+      y += 6;
+    };
+
+    sectionTitle('Evento');
+    row('Nome', race.name);
+    row('Data', `${format(parseISO(race.date), 'dd/MM/yyyy')} às ${race.time || ''}`.trim());
+    row('Local', `${race.location || ''}, ${race.city || ''}/${race.state || ''}`);
+    y += 4;
+
+    sectionTitle('Participante');
+    row('Nome', user.name);
+    row('CPF', user.cpf);
+    y += 4;
+
+    sectionTitle('Inscrição');
+    if (registration.kitName) row('Kit', registration.kitName);
+    if (registration.distance) row('Distância', `${registration.distance} km`);
+    if (registration.tshirtSize) row('Camiseta', `Tam. ${registration.tshirtSize}`);
+    y += 4;
+
+    sectionTitle('Pagamento');
+    row('Método', `${payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)`);
+    row('Inscrição', `R$ ${formatBRL(payment.amount)}`);
+    row('Taxa', `R$ ${formatBRL(toSafeNumber(payment.total) - toSafeNumber(payment.amount))}`);
+    y += 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(5, 150, 105);
+    row('TOTAL', `R$ ${formatBRL(payment.total)}`);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(30, 41, 59);
+    row('Status', 'APROVADO');
+    row('Transação', String(payment.transactionId || '-'));
+    y += 8;
+
+    // Rodapé
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} - Smart Brasil Ticket`, pageW / 2, 285, { align: 'center' });
+    doc.text('Apresente este comprovante (código de confirmação) na retirada do kit.', pageW / 2, 290, { align: 'center' });
+
+    doc.save(`comprovante-${registration.confirmationCode}.pdf`);
   };
 
   return (
