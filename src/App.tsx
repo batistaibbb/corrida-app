@@ -1573,7 +1573,16 @@ function PaymentPage() {
       try {
         const sessionRes = await supabase?.auth.getSession();
         accessToken = sessionRes?.data?.session?.access_token;
-      } catch { /* segue com anon key */ }
+      } catch { /* segue sem sessão */ }
+
+      // Se não houver sessão ativa (janela anônima, sessão expirada ou login
+      // antigo do modo demo), usamos a anon key. A Edge Function detecta que
+      // não é um usuário autenticado e usa o service role no servidor para
+      // validar a inscrição pelo ID — o fluxo continua funcionando.
+      const bearerToken = accessToken || anonKey;
+      if (!bearerToken) {
+        throw new Error('Configuração incompleta: chave pública do Supabase ausente neste build.');
+      }
 
       let res: Response;
       try {
@@ -1581,7 +1590,8 @@ function PaymentPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken || anonKey}`,
+            apikey: anonKey,
+            Authorization: `Bearer ${bearerToken}`,
             'x-app-url': window.location.origin,
           },
           body: JSON.stringify({ registrationId: registration!.id }),

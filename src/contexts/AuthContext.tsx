@@ -2,6 +2,16 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { User } from '../types';
 import { supabase, isDemoMode } from '../lib/supabase';
 
+// Remove resquícios de "sessão" do modo demo (localStorage) quando o app está
+// em modo produção (Supabase configurado). Esses dados antigos ficam órfãos
+// após a migração e já causaram inconsistências de estado de login.
+try {
+  if (!isDemoMode) {
+    localStorage.removeItem('rb_session');
+    localStorage.removeItem('rb_users');
+  }
+} catch { /* storage indisponível */ }
+
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;

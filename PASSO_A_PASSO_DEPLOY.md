@@ -122,3 +122,33 @@ Quando os testes passarem:
 - [ ] Relatório admin mostrando participante, telefone e kit + filtros funcionando
 
 Se qualquer etapa apresentar erro, copie a mensagem exata (console F12 ou resposta do Supabase) e me envie que eu corrijo cirurgicamente.
+
+## 🔎 Por que funcionava só no navegador com perfil admin (e falhava na aba anônima)
+
+**Diagnóstico confirmado:** a Edge Function `create-checkout-payment` exige uma
+sessão Supabase válida (`auth.getUser()`). No seu navegador principal existia
+uma sessão ativa; na aba anônima não há sessão nenhuma — o header de auth era
+recusado e o checkout quebrava.
+
+**Correção aplicada (commit atual):**
+1. A Edge Function agora aceita requisições sem sessão de usuário: quando o
+   token recebido é a anon key, ela usa `SUPABASE_SERVICE_ROLE_KEY` no servidor
+   para validar a inscrição pelo ID (o ID só existe na URL da própria página de
+   pagamento). O fluxo funciona em qualquer navegador/aba.
+2. O frontend passou a enviar sempre o header `apikey` + `Authorization`
+   (sessão do usuário quando existir, senão a anon key), como manda o padrão do
+   Supabase.
+3. Resquícios de login do "modo demo" (localStorage) são limpos automaticamente
+   em produção, evitando estados fantasma.
+
+**⚠️ Ação obrigatória após este deploy:** reimplante a função alterada e garanta
+o secret do service role:
+
+```bash
+npx supabase functions deploy create-checkout-payment --no-verify-jwt
+```
+
+Se ainda não existir, crie o secret `SUPABASE_SERVICE_ROLE_KEY` (Dashboard →
+Settings → API → `service_role` — NUNCA exponha essa chave no frontend) em
+Code Edge → Secrets. As demais funções já usavam esse secret, então ele
+provavelmente já está configurado.

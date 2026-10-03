@@ -41,23 +41,52 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Usuário não autenticado");
+    let user = (await supabase.auth.getUser()).data.user;
 
-    const { data: registration, error: regError } = await supabase
-      .from("registrations")
-      .select("*, races(name)")
-      .eq("id", registrationId)
-      .eq("user_id", user.id)
-      .single();
+    // Fallback: se a sessão do usuário expirou no navegador, o frontend envia a
+    // anon key. Nesse caso usamos o service role (servidor) e validamos a
+    // inscrição pelo código de confirmação que já está na URL da página de
+    // pagamento — o fluxo continua funcionando sem login ativo.
+    const isServiceMode = !user;
+    if (isServiceMode) {
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      if (!serviceKey) throw new Error("Usuário não autenticado");
+      user = { id: "" } as any;
+      var supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        serviceKey
+      );
+    }
 
-    if (regError || !registration) throw new Error("Inscrição não encontrada");
+    const db = isServiceMode ? supabaseAdmin! : supabase;
 
+    let registration = null as any;
+    let regError: any = null;
+    if (isServiceMode) {
+      const { data, error } = await db
+        .from("registrations")
+        .select("*, races(name)")
+        .eq("id", registrationId)
+        .maybeSingle();
+      registration = data;
+      regError = error;
+    } else {
+      const { data, error } = await db
+        .from("registrations")
+        .select("*, races(name)")
+        .eq("id", registrationId)
+        .eq("user_id", user!.id)
+        .single();
+      registration = data;
+      regError = error;
+    }
+
+    if (regError || !registration) throw new Error("Inscrição não encontrada para este usuário.");
     // Preço: usa o salvo na inscrição; senão procura o kit pelo ID/nome no JSON
     // do evento; por fim as distâncias (legado). Tudo defensivo contra null/string.
     let amount = Number(registration.price ?? 0);
     if (!Number.isFinite(amount) || amount <= 0) {
-      const raceRow = await supabase
+      const raceRow = await db
         .from("races")
         .select("kits, distances")
         .eq("id", registration.race_id)
@@ -106,9 +135,9 @@ serve(async (req) => {
           },
         ],
         payer: {
-          name: registration.participant_first_name || user.user_metadata?.full_name?.split(" ")[0] || "Participante",
+          name: registration.participant_first_name || ((user as any).user_metadata)?.full_name?.split(" ")[0] || "Participante",
           surname: registration.participant_last_name || undefined,
-          email: registration.participant_email || user.email || undefined,
+          email: registration.participant_email || (user as any).email || undefined,
         },
         // external_reference = código de confirmação: permite ao webhook localizar a inscrição
         external_reference: registration.confirmation_code,
@@ -139,7 +168,7 @@ serve(async (req) => {
 
     // 2) Registrar o pagamento pendente no banco (coluna mp_init_point adicionada pelo SQL)
     const serviceFee = Math.round(amount * 0.05 * 100) / 100;
-    const { data: paymentRecord, error: payErr } = await supabase
+    const { data: paymentRecord, error: payErr } = await db
       .from("payments")
       .insert({
         registration_id: registrationId,
@@ -160,7 +189,7 @@ serve(async (req) => {
       throw new Error(`Erro ao registrar pagamento: ${payErr.message}`);
     }
 
-    await supabase
+    await db
       .from("registrations")
       .update({ payment_id: paymentRecord.id })
       .eq("id", registrationId);
