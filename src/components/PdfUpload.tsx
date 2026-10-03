@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, X, FileText, AlertCircle, Download, Eye } from 'lucide-react';
+import { Upload, X, FileText, AlertCircle, Download, Eye, Link as LinkIcon, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface PdfUploadProps {
@@ -17,6 +17,8 @@ export default function PdfUpload({
 }: PdfUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [manualUrl, setManualUrl] = useState(value);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -40,10 +42,9 @@ export default function PdfUpload({
 
     try {
       if (!supabase) {
-        throw new Error('Supabase não configurado');
+        throw new Error('Supabase não está configurado. Use a opção "Inserir URL manualmente" abaixo.');
       }
 
-      // Upload para Supabase Storage
       const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.pdf`;
       const filePath = `${fileName}`;
 
@@ -51,24 +52,48 @@ export default function PdfUpload({
         .from(bucket)
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Erro detalhado do upload:', uploadError);
+        
+        if (uploadError.message.includes('bucket not found')) {
+          throw new Error(`O bucket "${bucket}" não existe. Crie-o no Supabase Dashboard em Storage → New bucket.`);
+        } else if (uploadError.message.includes('new row violates row-level security')) {
+          throw new Error('Permissão negada. Configure as políticas de segurança do Storage no Supabase.');
+        } else {
+          throw new Error(`Erro ao fazer upload: ${uploadError.message}. Use a opção "Inserir URL manualmente" abaixo.`);
+        }
+      }
 
-      // Obter URL pública
       const { data: { publicUrl } } = supabase.storage
         .from(bucket)
         .getPublicUrl(filePath);
 
       onChange(publicUrl);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Erro ao fazer upload:', err);
-      setError('Erro ao fazer upload do PDF');
+      const errorMessage = err.message || 'Erro desconhecido ao fazer upload do PDF';
+      setError(errorMessage);
+      setShowUrlInput(true);
     } finally {
       setUploading(false);
     }
   };
 
+  const handleManualUrl = () => {
+    if (manualUrl && manualUrl.trim()) {
+      onChange(manualUrl.trim());
+      setError(null);
+      setShowUrlInput(false);
+    } else {
+      setError('Por favor, insira uma URL válida');
+    }
+  };
+
   const handleRemove = () => {
     onChange('');
+    setManualUrl('');
+    setShowUrlInput(false);
+    setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -112,6 +137,17 @@ export default function PdfUpload({
                       <Download className="w-3 h-3" />
                       Baixar
                     </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUrlInput(true);
+                        setManualUrl(value);
+                      }}
+                      className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"
+                    >
+                      <LinkIcon className="w-3 h-3" />
+                      Editar URL
+                    </button>
                   </div>
                 </div>
               </div>
@@ -159,11 +195,78 @@ export default function PdfUpload({
 
       {/* Mensagem de erro */}
       {error && (
-        <div className="flex items-center gap-2 text-sm text-red-600">
-          <AlertCircle className="w-4 h-4" />
-          <span>{error}</span>
+        <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">
+          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p>{error}</p>
+            {error.includes('bucket') && (
+              <div className="mt-2 text-xs text-red-700 bg-red-100 rounded p-2">
+                <p className="font-semibold mb-1">Como criar o bucket no Supabase:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Acesse o Dashboard do Supabase</li>
+                  <li>Vá em <strong>Storage</strong> (menu lateral)</li>
+                  <li>Clique em <strong>"New bucket"</strong></li>
+                  <li>Nome: <code className="bg-red-200 px-1 rounded">{bucket}</code></li>
+                  <li>Marque <strong>"Public bucket"</strong></li>
+                  <li>Clique em <strong>"Create bucket"</strong></li>
+                </ol>
+              </div>
+            )}
+          </div>
         </div>
       )}
+
+      {/* Opção de URL manual */}
+      <div className="border-t border-slate-200 pt-3">
+        {!showUrlInput ? (
+          <button
+            type="button"
+            onClick={() => setShowUrlInput(true)}
+            className="flex items-center gap-2 text-sm text-emerald-600 hover:text-emerald-700 font-medium"
+          >
+            <LinkIcon className="w-4 h-4" />
+            Inserir URL manualmente
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-slate-600">
+              URL do PDF:
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={manualUrl}
+                onChange={(e) => setManualUrl(e.target.value)}
+                placeholder="https://exemplo.com/regulamento.pdf"
+                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+              />
+              <button
+                type="button"
+                onClick={handleManualUrl}
+                className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                Aplicar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUrlInput(false);
+                  setError(null);
+                }}
+                className="px-4 py-2 border border-slate-300 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+            <p className="text-xs text-slate-500 flex items-start gap-1">
+              <Info className="w-3 h-3 mt-0.5 flex-shrink-0" />
+              <span>
+                Use URLs de PDFs hospedados no Google Drive, Dropbox, ou qualquer serviço de hospedagem de arquivos.
+              </span>
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
