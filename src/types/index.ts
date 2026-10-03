@@ -102,4 +102,11 @@ export interface Registration {
   createdAt: string;
   emergencyName: string;
   emergencyPhone: string;
+  // Dados do participante coletados no formulário de inscrição
+  // (persistidos na inscrição para o relatório admin não depender do perfil)
+  participantFirstName?: string;
+  participantLastName?: string;
+  participantEmail?: string;
+  participantPhone?: string;
+  participantCpf?: string;
 }

@@ -1068,6 +1068,12 @@ function RegistrationPage() {
         status: 'pending_payment',
         emergencyName: formData.emergencyName,
         emergencyPhone: formData.emergencyPhone,
+        // Dados do participante persistidos na inscrição (relatório admin)
+        participantFirstName: formData.firstName,
+        participantLastName: formData.lastName,
+        participantEmail: formData.email,
+        participantPhone: formData.phone,
+        participantCpf: formData.cpf,
       });
       if (!regId) throw new Error('Inscrição não retornou ID');
       navigate(`/pagamento/${regId}`);
@@ -1293,6 +1299,11 @@ function PaymentPage() {
             createdAt: data.created_at ?? data.createdAt,
             emergencyName: data.emergency_name ?? data.emergencyName ?? '',
             emergencyPhone: data.emergency_phone ?? data.emergencyPhone ?? '',
+            participantFirstName: data.participant_first_name ?? undefined,
+            participantLastName: data.participant_last_name ?? undefined,
+            participantEmail: data.participant_email ?? undefined,
+            participantPhone: data.participant_phone ?? undefined,
+            participantCpf: data.participant_cpf ?? undefined,
           });
         }
       } catch (err) {
@@ -1644,6 +1655,11 @@ function ReceiptPage() {
             createdAt: data.created_at ?? data.createdAt,
             emergencyName: data.emergency_name ?? data.emergencyName ?? '',
             emergencyPhone: data.emergency_phone ?? data.emergencyPhone ?? '',
+            participantFirstName: data.participant_first_name ?? undefined,
+            participantLastName: data.participant_last_name ?? undefined,
+            participantEmail: data.participant_email ?? undefined,
+            participantPhone: data.participant_phone ?? undefined,
+            participantCpf: data.participant_cpf ?? undefined,
           });
         }
       } catch (err) {
@@ -1698,13 +1714,105 @@ function ReceiptPage() {
   }
 
   const handleDownload = () => {
-    const content = `COMPROVANTE DE INSCRIÇÃO - SMART BRASIL TICKET\n\nCódigo: ${registration.confirmationCode}\n\nEVENTO\n${race.name}\nData: ${format(parseISO(race.date), "dd/MM/yyyy")}\nLocal: ${race.location}, ${race.city}/${race.state}\n\nINSCRITO\nNome: ${user.name}\nCPF: ${user.cpf}\n\nINSCRIÇÃO\nDistância: ${registration.distance}km\nCamiseta: Tam. ${registration.tshirtSize}\n\nPAGAMENTO\nMétodo: ${payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)\nTotal: R$ ${formatBRL(payment.total)}\nStatus: APROVADO\nTransação: ${payment.transactionId}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `comprovante-${registration.confirmationCode}.txt`;
-    a.click();
+    // Gera o comprovante em PDF (jsPDF já incluído no projeto)
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const marginX = 20;
+    let y = 0;
+
+    // Cabeçalho com gradiente (faixa sólida em verde)
+    doc.setFillColor(5, 150, 105); // emerald-600
+    doc.rect(0, 0, pageW, 32, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text('SMART BRASIL TICKET', pageW / 2, 14, { align: 'center' });
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Comprovante de Inscrição Confirmada', pageW / 2, 23, { align: 'center' });
+
+    y = 44;
+
+    // Status de confirmação
+    doc.setTextColor(5, 150, 105);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('PAGAMENTO CONFIRMADO', pageW / 2, y, { align: 'center' });
+    y += 10;
+
+    // Código de confirmação
+    doc.setTextColor(30, 41, 59);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Código de Confirmação', pageW / 2, y, { align: 'center' });
+    y += 7;
+    doc.setFontSize(16);
+    doc.setFont('courier', 'bold');
+    doc.text(registration.confirmationCode || '-', pageW / 2, y, { align: 'center' });
+    y += 10;
+
+    doc.setDrawColor(203, 213, 225);
+    doc.line(marginX, y, pageW - marginX, y);
+    y += 10;
+
+    const sectionTitle = (title: string) => {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(5, 150, 105);
+      doc.text(title.toUpperCase(), marginX, y);
+      y += 7;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(51, 65, 85);
+    };
+    const row = (label: string, value: string) => {
+      doc.setTextColor(100, 116, 139);
+      doc.text(`${label}:`, marginX, y);
+      doc.setTextColor(30, 41, 59);
+      doc.text(value || '-', marginX + 45, y);
+      y += 6;
+    };
+
+    sectionTitle('Evento');
+    row('Nome', race.name);
+    row('Data', `${format(parseISO(race.date), 'dd/MM/yyyy')} às ${race.time || ''}`.trim());
+    row('Local', `${race.location || ''}, ${race.city || ''}/${race.state || ''}`);
+    y += 4;
+
+    sectionTitle('Participante');
+    row('Nome', user.name);
+    row('CPF', user.cpf);
+    y += 4;
+
+    sectionTitle('Inscrição');
+    if (registration.kitName) row('Kit', registration.kitName);
+    if (registration.distance) row('Distância', `${registration.distance} km`);
+    if (registration.tshirtSize) row('Camiseta', `Tam. ${registration.tshirtSize}`);
+    y += 4;
+
+    sectionTitle('Pagamento');
+    row('Método', `${payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)`);
+    row('Inscrição', `R$ ${formatBRL(payment.amount)}`);
+    row('Taxa', `R$ ${formatBRL(toSafeNumber(payment.total) - toSafeNumber(payment.amount))}`);
+    y += 2;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(5, 150, 105);
+    row('TOTAL', `R$ ${formatBRL(payment.total)}`);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(30, 41, 59);
+    row('Status', 'APROVADO');
+    row('Transação', String(payment.transactionId || '-'));
+    y += 8;
+
+    // Rodapé
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm")} - Smart Brasil Ticket`, pageW / 2, 285, { align: 'center' });
+    doc.text('Apresente este comprovante (código de confirmação) na retirada do kit.', pageW / 2, 290, { align: 'center' });
+
+    doc.save(`comprovante-${registration.confirmationCode}.pdf`);
   };
 
   return (
@@ -1772,6 +1880,35 @@ function ReceiptPage() {
   );
 }
 
+// Helpers do relatório: nome/contato do participante com fallbacks
+// (inscrições antigas não têm os campos persistidos; tenta o perfil demo)
+function getParticipantName(reg: Registration): string {
+  const full = [reg.participantFirstName, reg.participantLastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  if (full) return full;
+  if (reg.userId === 'user-001') return 'João Pereira';
+  if (reg.userId === 'user-002') return 'Maria Silva';
+  return '-';
+}
+
+function getParticipantPhone(reg: Registration): string {
+  return reg.participantPhone || '-';
+}
+
+function getParticipantEmail(reg: Registration): string {
+  return reg.participantEmail || '-';
+}
+
+function getParticipantCpf(reg: Registration): string {
+  return reg.participantCpf || '-';
+}
+
+function getKitLabel(reg: Registration): string {
+  return reg.kitName || '-';
+}
+
 // Funções de Exportação
 function exportToPDF(registrations: Registration[], races: Race[]) {
   const doc = new jsPDF();
@@ -1787,12 +1924,16 @@ function exportToPDF(registrations: Registration[], races: Race[]) {
   // Total de inscrições
   doc.text(`Total de inscrições: ${registrations.length}`, 14, 36);
   
-  // Tabela de inscrições
+  // Tabela de inscrições (participante + kit para controle de distribuição)
   const tableData = registrations.map(reg => {
     const race = races.find(r => r.id === reg.raceId);
     return [
       reg.confirmationCode,
+      getParticipantName(reg),
+      getParticipantPhone(reg),
+      getParticipantCpf(reg),
       race?.name || 'N/A',
+      getKitLabel(reg),
       `${reg.distance}km`,
       reg.tshirtSize || 'N/A',
       reg.status === 'confirmed' ? 'Confirmado' : 'Pendente',
@@ -1801,10 +1942,10 @@ function exportToPDF(registrations: Registration[], races: Race[]) {
   });
   
   autoTable(doc, {
-    head: [['Código', 'Evento', 'Distância', 'Camisa', 'Status', 'Data']],
+    head: [['Código', 'Participante', 'Telefone', 'CPF', 'Evento', 'Kit', 'Distância', 'Camisa', 'Status', 'Data']],
     body: tableData,
     startY: 42,
-    styles: { fontSize: 8 },
+    styles: { fontSize: 7 },
     headStyles: { fillColor: [16, 185, 129] }
   });
   
@@ -1817,7 +1958,13 @@ function exportToExcel(registrations: Registration[], races: Race[]) {
     const race = races.find(r => r.id === reg.raceId);
     return {
       'Código': reg.confirmationCode,
+      'Participante': getParticipantName(reg),
+      'Telefone': getParticipantPhone(reg),
+      'E-mail': getParticipantEmail(reg),
+      'CPF': getParticipantCpf(reg),
       'Evento': race?.name || 'N/A',
+      'Kit Escolhido': getKitLabel(reg),
+      'Valor (R$)': toSafeNumber(reg.price),
       'Distância': `${reg.distance}km`,
       'Tamanho Camisa': reg.tshirtSize || 'N/A',
       'Status': reg.status === 'confirmed' ? 'Confirmado' : 'Pendente',
@@ -1872,6 +2019,28 @@ function RegistrationDetailsModal({ registration, race, onClose }: { registratio
             </div>
             
             <div className="border-t border-slate-200 pt-4">
+              <h3 className="font-semibold text-slate-900 mb-3">Participante</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-500">Nome</p>
+                  <p className="font-semibold text-slate-900">{getParticipantName(registration)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Telefone</p>
+                  <p className="font-semibold text-slate-900">{getParticipantPhone(registration)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">E-mail</p>
+                  <p className="font-semibold text-slate-900">{getParticipantEmail(registration)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">CPF</p>
+                  <p className="font-semibold text-slate-900">{getParticipantCpf(registration)}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-200 pt-4">
               <h3 className="font-semibold text-slate-900 mb-3">Inscrição</h3>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1886,12 +2055,14 @@ function RegistrationDetailsModal({ registration, race, onClose }: { registratio
                   <p className="text-xs text-slate-500">Data da Inscrição</p>
                   <p className="font-semibold text-slate-900">{format(parseISO(registration.createdAt), 'dd/MM/yyyy')}</p>
                 </div>
-                {registration.kitName && (
-                  <div>
-                    <p className="text-xs text-slate-500">Kit Selecionado</p>
-                    <p className="font-semibold text-slate-900">{registration.kitName}</p>
-                  </div>
-                )}
+                <div>
+                  <p className="text-xs text-slate-500">Kit Selecionado</p>
+                  <p className="font-semibold text-slate-900">{registration.kitName || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Valor da Inscrição</p>
+                  <p className="font-semibold text-slate-900">R$ {formatBRL(registration.price)}</p>
+                </div>
               </div>
             </div>
             
@@ -1929,9 +2100,30 @@ function AdminDashboard() {
   const [showForm, setShowForm] = useState(false);
   const [editingRace, setEditingRace] = useState<Race | null>(null);
   const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
+  // Filtros da aba de Inscrições (relatório)
+  const [regFilterRace, setRegFilterRace] = useState<string>('all');
+  const [regFilterStatus, setRegFilterStatus] = useState<string>('all');
+  const [regSearch, setRegSearch] = useState<string>('');
   const stats = getStats();
 
   const handleLogout = () => { logout(); navigate('/'); };
+
+  // Lista filtrada de inscrições para tabela e exportações do relatório
+  const filteredRegistrations = registrations.filter(reg => {
+    if (regFilterRace !== 'all' && reg.raceId !== regFilterRace) return false;
+    if (regFilterStatus === 'confirmed' && reg.status !== 'confirmed') return false;
+    if (regFilterStatus === 'pending' && reg.status === 'confirmed') return false;
+    if (regSearch.trim()) {
+      const q = regSearch.trim().toLowerCase();
+      const raceName = (races.find(r => r.id === reg.raceId)?.name || '').toLowerCase();
+      const haystack = [
+        getParticipantName(reg), getParticipantPhone(reg), getParticipantEmail(reg),
+        getParticipantCpf(reg), reg.confirmationCode, reg.kitName || '', raceName,
+      ].join(' ').toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -2063,14 +2255,14 @@ function AdminDashboard() {
               <h1 className="text-2xl font-bold">Inscrições</h1>
               <div className="flex gap-2">
                 <button
-                  onClick={() => exportToPDF(registrations, races)}
+                  onClick={() => exportToPDF(filteredRegistrations, races)}
                   className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors"
                 >
                   <FileText className="w-4 h-4" />
                   Exportar PDF
                 </button>
                 <button
-                  onClick={() => exportToExcel(registrations, races)}
+                  onClick={() => exportToExcel(filteredRegistrations, races)}
                   className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white font-medium rounded-lg hover:bg-green-700 transition-colors"
                 >
                   <Download className="w-4 h-4" />
@@ -2078,33 +2270,81 @@ function AdminDashboard() {
                 </button>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-              <table className="w-full">
+
+            {/* Filtros do relatório */}
+            <div className="bg-white rounded-xl p-4 shadow-sm mb-4 flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={regSearch}
+                  onChange={(e) => setRegSearch(e.target.value)}
+                  placeholder="Buscar por nome, telefone, CPF, e-mail, código ou kit..."
+                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                />
+              </div>
+              <select
+                value={regFilterRace}
+                onChange={(e) => setRegFilterRace(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">Todos os eventos</option>
+                {races.map(race => (
+                  <option key={race.id} value={race.id}>{race.name}</option>
+                ))}
+              </select>
+              <select
+                value={regFilterStatus}
+                onChange={(e) => setRegFilterStatus(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="all">Todos os status</option>
+                <option value="confirmed">Confirmados</option>
+                <option value="pending">Pendentes</option>
+              </select>
+              <span className="text-sm text-gray-500 whitespace-nowrap">
+                {filteredRegistrations.length} de {registrations.length} inscrições
+              </span>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm overflow-x-auto">
+              <table className="w-full min-w-[900px]">
                 <thead className="bg-gray-50 border-b">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Código</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Participante</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Evento</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Distância</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Ações</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Código</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Participante</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Telefone</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Evento</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Kit</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Camisa</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {registrations.map(reg => {
+                  {filteredRegistrations.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-6 py-10 text-center text-sm text-gray-500">
+                        Nenhuma inscrição encontrada com os filtros selecionados.
+                      </td>
+                    </tr>
+                  ) : filteredRegistrations.map(reg => {
                     const race = races.find(r => r.id === reg.raceId);
                     return (
                       <tr key={reg.id}>
-                        <td className="px-6 py-4 font-mono text-sm">{reg.confirmationCode}</td>
-                        <td className="px-6 py-4 text-sm font-medium text-slate-900">
-                          {reg.userId === 'user-001' ? 'João Pereira' : 
-                           reg.userId === 'user-002' ? 'Maria Silva' : 
-                           `Participante ${reg.userId.slice(-4)}`}
+                        <td className="px-4 py-4 font-mono text-sm">{reg.confirmationCode}</td>
+                        <td className="px-4 py-4 text-sm font-medium text-slate-900">
+                          {getParticipantName(reg)}
+                          {reg.participantEmail && (
+                            <p className="text-xs font-normal text-gray-500">{reg.participantEmail}</p>
+                          )}
                         </td>
-                        <td className="px-6 py-4 text-sm">{race?.name}</td>
-                        <td className="px-6 py-4 text-sm">{reg.distance}km</td>
-                        <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{reg.status === 'confirmed' ? 'Confirmado' : 'Pendente'}</span></td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-4 py-4 text-sm">{getParticipantPhone(reg)}</td>
+                        <td className="px-4 py-4 text-sm">{race?.name || 'N/A'}</td>
+                        <td className="px-4 py-4 text-sm">{reg.kitName || '-'}</td>
+                        <td className="px-4 py-4 text-sm">{reg.tshirtSize || 'N/A'}</td>
+                        <td className="px-4 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{reg.status === 'confirmed' ? 'Confirmado' : 'Pendente'}</span></td>
+                        <td className="px-4 py-4 text-right">
                           <button
                             onClick={() => setSelectedRegistration(reg)}
                             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
