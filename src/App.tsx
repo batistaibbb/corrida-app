@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider, useData } from './contexts/DataContext';
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
 import { supabase, isDemoMode } from './lib/supabase';
 import DiagnosticPage from './pages/DiagnosticPage';
@@ -97,6 +97,77 @@ function ProtectedRoute({ children, requiredRole }: { children: ReactNode; requi
   }
   return <>{children}</>;
 }
+
+// ============ ERROR BOUNDARY ============
+// Captura erros de render (ex.: dados incompletos vindos do banco) e mostra um
+// estado claro em vez de deixar a tela completamente em branco.
+
+type ErrorBoundaryProps = { children: ReactNode };
+type ErrorBoundaryState = { error: Error | null };
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: any) {
+    console.error('Erro capturado pelo ErrorBoundary:', error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
+            <p className="font-bold text-slate-900 mb-1">Algo deu errado nesta tela</p>
+            <p className="text-sm text-slate-500 mb-4 break-words">{String(this.state.error?.message || this.state.error)}</p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => window.location.reload()} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+                Recarregar página
+              </button>
+              <button onClick={() => { window.location.href = '/'; }} className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700">
+                Voltar para o início
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// ============ HELPERS DE PREÇO (DEFENSIVOS) ============
+// O Supabase pode retornar valores NUMERIC como string, null ou até colunas
+// ausentes (ex.: "price" dentro do JSON de kits/distances quando o admin salvou
+// sem preencher). Qualquer acesso direto a .toFixed() desses valores derruba o
+// React e causa a temida tela em branco. Todos os renders de moeda passam por
+// estes helpers, que SEMPRE devolvem um número seguro.
+
+const toSafeNumber = (value: any): number => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+};
+
+// Menor preço entre distâncias E kits — usado nos cards/listas onde antes só
+// existia Math.min(...distances.map(d => d.price)), que quebrava com price null.
+const getLowestPrice = (race?: { distances?: any[]; kits?: any[] } | null): number => {
+  if (!race) return 0;
+  const prices = [
+    ...(race.distances || []).map((d: any) => toSafeNumber(d?.price)),
+    ...(race.kits || []).map((k: any) => toSafeNumber(k?.price)),
+  ].filter((p) => p > 0);
+  return prices.length ? Math.min(...prices) : 0;
+};
+
+// Preço efetivo de uma distância/kit já aplicando o desconto do evento.
+const discounted = (price: any, discount?: number) =>
+  toSafeNumber(price) * (1 - toSafeNumber(discount) / 100);
+
+const formatBRL = (value: any): string =>
+  toSafeNumber(value).toFixed(2).replace('.', ',');
 
 // ============ PAGES ============
 
@@ -365,18 +436,18 @@ function HomePage() {
                   <div className="absolute bottom-4 left-4 right-4">
                     <div className="flex items-end justify-between">
                       <div>
-                        {race.discount ? (
+                        {race.discount && race.discount > 0 ? (
                           <>
                             <span className="text-sm text-white/70 line-through">
-                              R$ {Math.min(...race.distances.map(d => d.price)).toFixed(2).replace('.', ',')}
+                              R$ {formatBRL(getLowestPrice(race))}
                             </span>
                             <div className="text-2xl font-bold text-white">
-                              R$ {(Math.min(...race.distances.map(d => d.price)) * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
+                              R$ {formatBRL(discounted(getLowestPrice(race), race.discount))}
                             </div>
                           </>
                         ) : (
                           <div className="text-2xl font-bold text-white">
-                            R$ {Math.min(...race.distances.map(d => d.price)).toFixed(2).replace('.', ',')}
+                            R$ {formatBRL(getLowestPrice(race))}
                           </div>
                         )}
                       </div>
@@ -620,7 +691,7 @@ function RaceDetailsPage() {
     }
   };
 
-  const minPrice = Math.min(...race.distances.map(d => d.price));
+  const minPrice = getLowestPrice(race);
   const occupancyRate = (race.participants / race.maxParticipants) * 100;
 
   return (
@@ -757,18 +828,18 @@ function RaceDetailsPage() {
                       </ul>
                       <div className="flex justify-between items-center">
                         <div>
-                          {race.discount ? (
+                          {race.discount && race.discount > 0 ? (
                             <>
                               <p className="text-sm text-slate-400 line-through">
-                                R$ {kit.price.toFixed(2).replace('.', ',')}
+                                R$ {formatBRL(kit.price)}
                               </p>
                               <p className="text-2xl font-bold text-emerald-600">
-                                R$ {(kit.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
+                                R$ {formatBRL(discounted(kit.price, race.discount))}
                               </p>
                             </>
                           ) : (
                             <p className="text-2xl font-bold text-emerald-600">
-                              R$ {kit.price.toFixed(2).replace('.', ',')}
+                              R$ {formatBRL(kit.price)}
                             </p>
                           )}
                         </div>
@@ -811,18 +882,18 @@ function RaceDetailsPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        {race.discount ? (
+                        {race.discount && race.discount > 0 ? (
                           <>
                             <p className="text-sm text-slate-400 line-through">
-                              R$ {d.price.toFixed(2).replace('.', ',')}
+                              R$ {formatBRL(d.price)}
                             </p>
                             <p className="text-2xl font-bold text-emerald-600">
-                              R$ {(d.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
+                              R$ {formatBRL(discounted(d.price, race.discount))}
                             </p>
                           </>
                         ) : (
                           <p className="text-2xl font-bold text-emerald-600">
-                            R$ {d.price.toFixed(2).replace('.', ',')}
+                            R$ {formatBRL(d.price)}
                           </p>
                         )}
                       </div>
@@ -893,18 +964,18 @@ function RaceDetailsPage() {
                 <div className="mb-4 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
                   <p className="text-sm text-emerald-700 mb-1">Distância selecionada</p>
                   <p className="text-2xl font-bold text-slate-900">{selectedDistance} km</p>
-                  {race.discount ? (
+                  {race.discount && race.discount > 0 ? (
                     <>
                       <p className="text-sm text-slate-400 line-through mt-2">
-                        R$ {race.distances.find(d => d.km === selectedDistance)?.price.toFixed(2).replace('.', ',')}
+                        R$ {formatBRL(race.distances.find(d => d.km === selectedDistance)?.price)}
                       </p>
                       <p className="text-3xl font-bold text-emerald-600">
-                        R$ {(race.distances.find(d => d.km === selectedDistance)!.price * (1 - race.discount / 100)).toFixed(2).replace('.', ',')}
+                        R$ {formatBRL(discounted(race.distances.find(d => d.km === selectedDistance)?.price, race.discount))}
                       </p>
                     </>
                   ) : (
                     <p className="text-3xl font-bold text-emerald-600 mt-2">
-                      R$ {race.distances.find(d => d.km === selectedDistance)?.price.toFixed(2).replace('.', ',')}
+                      R$ {formatBRL(race.distances.find(d => d.km === selectedDistance)?.price)}
                     </p>
                   )}
                 </div>
@@ -912,7 +983,7 @@ function RaceDetailsPage() {
                 <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
                   <p className="text-sm text-slate-500">Selecione uma distância</p>
                   <p className="text-2xl font-bold text-slate-400 mt-2">
-                    A partir de R$ {minPrice.toFixed(2).replace('.', ',')}
+                    A partir de R$ {formatBRL(minPrice)}
                   </p>
                 </div>
               )}
@@ -979,8 +1050,13 @@ function RegistrationPage() {
   };
 
   const handleSubmit = async () => {
+    const kit = getSelectedKit();
+    // Validação explícita: sem preço numérico válido a tela de pagamento quebraria
+    if (!kit || !Number.isFinite(Number(kit.price)) || Number(kit.price) <= 0) {
+      alert('O preço do kit selecionado é inválido. Edite o evento no painel admin e defina um preço (número maior que zero).');
+      return;
+    }
     try {
-      const kit = getSelectedKit();
       const regId = await addRegistration({
         userId: user.id,
         raceId: race.id,
@@ -988,15 +1064,16 @@ function RegistrationPage() {
         tshirtSize: formData.tshirtSize,
         kitId: selectedKit,
         kitName: kit?.name,
-        price: kit?.price,
+        price: Number(kit.price),
         status: 'pending_payment',
         emergencyName: formData.emergencyName,
         emergencyPhone: formData.emergencyPhone,
       });
+      if (!regId) throw new Error('Inscrição não retornou ID');
       navigate(`/pagamento/${regId}`);
     } catch (error) {
       console.error('Erro ao criar inscrição:', error);
-      alert('Erro ao criar inscrição. Tente novamente.');
+      alert(`Erro ao criar inscrição: ${error instanceof Error ? error.message : 'tente novamente'}.`);
     }
   };
 
@@ -1036,7 +1113,7 @@ function RegistrationPage() {
                           ))}
                         </ul>
                         <div className="flex justify-between items-center">
-                          <span className="text-2xl font-bold text-emerald-600">R$ {kit.price.toFixed(2).replace('.', ',')}</span>
+                          <span className="text-2xl font-bold text-emerald-600">R$ {formatBRL(kit.price)}</span>
                           {kit.distance && kit.distance > 0 && (
                             <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded">
                               {kit.distance}km
@@ -1165,7 +1242,7 @@ function RegistrationPage() {
                   {formData.tshirtSize && (
                     <div className="flex justify-between"><span className="text-gray-500">Camisa</span><span className="font-medium">Tam. {formData.tshirtSize}</span></div>
                   )}
-                  <div className="flex justify-between pt-3 border-t"><span className="font-bold">Total</span><span className="font-bold text-emerald-600">R$ {getSelectedKit()?.price.toFixed(2).replace('.', ',')}</span></div>
+                  <div className="flex justify-between pt-3 border-t"><span className="font-bold">Total</span><span className="font-bold text-emerald-600">R$ {formatBRL(getSelectedKit()?.price)}</span></div>
                 </>
               )}
             </div>
@@ -1179,37 +1256,113 @@ function RegistrationPage() {
 function PaymentPage() {
   const { registrationId } = useParams();
   const { user } = useAuth();
-  const { registrations, getRaceById, addPayment, updateRegistration } = useData();
+  const { registrations, races, getRaceById, addPayment, updateRegistration } = useData();
   const navigate = useNavigate();
   // Fallback: se a inscrição ainda não estiver na lista em memória (ex.: recarregamento
-  // da página antes do refresh dos dados), busca direto no Supabase para evitar tela em branco.
+  // da página, realtime atrasado ou falha de sync), busca direto no Supabase para
+  // evitar tela em branco.
   const [fetchedRegistration, setFetchedRegistration] = useState<Registration | null>(null);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
+  const [fetchedRace, setFetchedRace] = useState<Race | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function fetchFallback() {
-      if (registrations.some(r => r.id === registrationId) || !registrationId || isDemoMode || !supabase) return;
+      if (!registrationId || isDemoMode || !supabase) { setFetchAttempted(true); return; }
+      if (registrations.some(r => r.id === registrationId)) { setFetchAttempted(true); return; }
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('registrations')
           .select('*')
           .eq('id', registrationId)
           .maybeSingle();
-        if (!cancelled && data) setFetchedRegistration(data);
+        if (error) console.error('Erro ao buscar inscrição:', error);
+        if (!cancelled && data) {
+          setFetchedRegistration({
+            id: data.id,
+            userId: data.user_id ?? data.userId,
+            raceId: data.race_id ?? data.raceId,
+            distance: Number(data.distance ?? 0),
+            tshirtSize: data.tshirt_size ?? data.tshirtSize ?? '',
+            kitId: data.kit_id ?? data.kitId,
+            kitName: data.kit_name ?? data.kitName,
+            price: data.price != null ? Number(data.price) : undefined,
+            status: data.status,
+            paymentId: data.payment_id ?? data.paymentId,
+            confirmationCode: data.confirmation_code ?? data.confirmationCode ?? '',
+            createdAt: data.created_at ?? data.createdAt,
+            emergencyName: data.emergency_name ?? data.emergencyName ?? '',
+            emergencyPhone: data.emergency_phone ?? data.emergencyPhone ?? '',
+          });
+        }
       } catch (err) {
         console.error('Erro ao buscar inscrição:', err);
+      } finally {
+        if (!cancelled) setFetchAttempted(true);
       }
     }
     fetchFallback();
     return () => { cancelled = true; };
   }, [registrationId, registrations]);
 
-  const registration = registrations.find(r => r.id === registrationId) || fetchedRegistration;
-  const race = registration ? getRaceById(registration.raceId) : null;
-  // Preço vem do kit selecionado na inscrição; distances é apenas fallback
-  const kitPrice = registration?.price || (race?.kits?.find(k => k.id === registration?.kitId)?.price ?? 0);
-  const distancePrice = kitPrice || race?.distances?.find(d => d.km === registration?.distance)?.price || 0;
-  const total = distancePrice;
+  // Fallback para o evento: se a inscrição foi buscada direto do banco mas o evento
+  // correspondente ainda não está na lista em memória, busca o evento também.
+  const regForLookup = registrations.find(r => r.id === registrationId) || fetchedRegistration;
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchRace() {
+      const raceId = regForLookup?.raceId;
+      if (!raceId || isDemoMode || !supabase) return;
+      if (races.some(r => r.id === raceId)) return;
+      try {
+        const { data } = await supabase.from('races').select('*').eq('id', raceId).maybeSingle();
+        if (!cancelled && data) {
+          setFetchedRace({
+            ...data,
+            image: data.image_url || data.image,
+            organizer: data.organizer_name || data.organizer,
+            organizerId: data.organizer_id || data.organizerId,
+            participants: data.participants_count || data.participants || 0,
+            maxParticipants: data.max_participants || data.maxParticipants || 1000,
+            registrationStatus: data.registration_status || 'upcoming',
+            includes: data.includes || [],
+            rules: data.rules || [],
+            rating: data.rating || 0,
+            reviews: data.reviews_count || data.reviews || 0,
+            tags: data.tags || [],
+            distances: data.distances || [],
+            kits: data.kits || [],
+            shirtSizes: data.shirt_sizes || ['PP', 'P', 'M', 'G', 'GG', 'XGG'],
+            createdAt: data.created_at,
+          } as Race);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar evento:', err);
+      }
+    }
+    fetchRace();
+    return () => { cancelled = true; };
+  }, [regForLookup?.raceId, races]);
+
+  const registration = regForLookup;
+  const race = registration ? (getRaceById(registration.raceId) || (fetchedRace?.id === registration.raceId ? fetchedRace : null)) : null;
+
+  // Preço: prioriza o preço salvo na inscrição; senão procura o kit pelo ID OU pelo
+  // nome (o kit pode ter sido recriado/renumerado pelo admin após a inscrição);
+  // por fim tenta as distâncias como legado. SEMPRE normalizado com toSafeNumber —
+  // qualquer valor null/string/vindo do banco deixa de ser capaz de derrubar a tela.
+  const findKitPrice = (): number => {
+    const kits: any[] = race?.kits || [];
+    const byId = kits.find(k => k.id === registration?.kitId);
+    const byName = registration?.kitName ? kits.find(k => k.name === registration.kitName) : undefined;
+    const kit = byId || byName;
+    return toSafeNumber(kit?.price);
+  };
+  const rawPrice = toSafeNumber(registration?.price);
+  const distanceLegacyPrice = toSafeNumber(race?.distances?.find(d => d.km === registration?.distance)?.price);
+  const kitPrice = rawPrice > 0 ? rawPrice : (findKitPrice() || distanceLegacyPrice);
+  const total = kitPrice;
+  const distancePrice = kitPrice;
 
   const [selectedMethod, setSelectedMethod] = useState<'pix' | 'credit_card' | 'debit_card' | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -1218,7 +1371,18 @@ function PaymentPage() {
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [cardData, setCardData] = useState({ number: '', name: '', expiry: '', cvv: '', installments: '1' });
 
-  if (!registration || !race || !user) {
+  // Enquanto o fallback de busca está em andamento, mostra carregamento (evita
+  // "piscar" a tela de erro e depois sumir).
+  if (!registration && !fetchAttempted) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
+        <p className="ml-3 text-gray-600">Carregando sua inscrição...</p>
+      </div>
+    );
+  }
+
+  if (!registration || !user) {
     // Em vez de sumir a tela, mostra um estado claro com ação de voltar
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -1233,7 +1397,51 @@ function PaymentPage() {
     );
   }
 
-  const pixCode = `00020126580014br.gov.bcb.pix0136${registration.confirmationCode}520400005303986540${total.toFixed(2)}5802BR5925SMARTBRASIL6009SAO PAULO6304ABCD`;
+  if (!race) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="font-bold text-slate-900 mb-1">Evento não encontrado</p>
+          <p className="text-sm text-slate-500 mb-4">O evento desta inscrição não pôde ser carregado. Verifique sua conexão e tente novamente.</p>
+          <div className="flex gap-2 justify-center">
+            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+              Tentar novamente
+            </button>
+            <button onClick={() => navigate('/')} className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700">
+              Voltar ao início
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Bloqueia pagamento de inscrição sem preço válido (ex.: kit salvo no banco com
+  // price null e coluna price da inscrição ausente). Mostra estado claro em vez de
+  // renderizar uma tela de pagamento quebrada.
+  if (total <= 0) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center bg-white rounded-xl shadow-sm border border-slate-200 p-8">
+          <p className="font-bold text-slate-900 mb-1">Valor da inscrição não definido</p>
+          <p className="text-sm text-slate-500 mb-4">
+            O preço do kit "{registration.kitName || 'selecionado'}" está vazio ou inválido no cadastro do evento.
+            Peça ao organizador para editar o evento e preencher o preço do kit, depois volte a esta página.
+          </p>
+          <div className="flex gap-2 justify-center">
+            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+              Tentar novamente
+            </button>
+            <button onClick={() => navigate('/')} className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700">
+              Voltar ao início
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const pixCode = `00020126580014br.gov.bcb.pix0136${registration.confirmationCode}520400005303986540${toSafeNumber(total).toFixed(2)}5802BR5925SMARTBRASIL6009SAO PAULO6304ABCD`;
 
   const handlePixPayment = async () => {
     setProcessing(true);
@@ -1313,8 +1521,8 @@ function PaymentPage() {
             <div className="bg-white rounded-xl p-6 shadow-sm">
               <h2 className="font-bold mb-4">Resumo do Pedido</h2>
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-gray-500">Inscrição {registration.distance}km</span><span>R$ {distancePrice.toFixed(2).replace('.', ',')}</span></div>
-                <div className="flex justify-between pt-3 border-t font-bold text-lg"><span>Total</span><span className="text-orange-600">R$ {total.toFixed(2).replace('.', ',')}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Inscrição {registration.distance}km</span><span>R$ {formatBRL(distancePrice)}</span></div>
+                <div className="flex justify-between pt-3 border-t font-bold text-lg"><span>Total</span><span className="text-orange-600">R$ {formatBRL(total)}</span></div>
               </div>
             </div>
 
@@ -1350,15 +1558,15 @@ function PaymentPage() {
                       <input type="text" value={cardData.cvv} onChange={(e) => setCardData({...cardData, cvv: e.target.value})} placeholder="CVV" maxLength={4} className="px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500" />
                     </div>
                     <select value={cardData.installments} onChange={(e) => setCardData({...cardData, installments: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500">
-                      <option value="1">1x de R$ {total.toFixed(2).replace('.', ',')} (sem juros)</option>
-                      <option value="2">2x de R$ {(total / 2).toFixed(2).replace('.', ',')} (sem juros)</option>
-                      <option value="3">3x de R$ {(total / 3).toFixed(2).replace('.', ',')} (sem juros)</option>
-                      <option value="6">6x de R$ {(total / 6 * 1.05).toFixed(2).replace('.', ',')} (com juros)</option>
-                      <option value="12">12x de R$ {(total / 12 * 1.12).toFixed(2).replace('.', ',')} (com juros)</option>
+                      <option value="1">1x de R$ {formatBRL(total)} (sem juros)</option>
+                      <option value="2">2x de R$ {formatBRL(total / 2)} (sem juros)</option>
+                      <option value="3">3x de R$ {formatBRL(total / 3)} (sem juros)</option>
+                      <option value="6">6x de R$ {formatBRL(total / 6 * 1.05)} (com juros)</option>
+                      <option value="12">12x de R$ {formatBRL(total / 12 * 1.12)} (com juros)</option>
                     </select>
                     <button onClick={handleCardPayment} disabled={processing} className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 hover:from-emerald-700 hover:to-sky-700 transition-all">
                       <Shield className="w-4 h-4" />
-                      {processing ? 'Processando...' : `Pagar R$ ${total.toFixed(2).replace('.', ',')}`}
+                      {processing ? 'Processando...' : `Pagar R$ ${formatBRL(total)}`}
                     </button>
                   </div>
                 )}
@@ -1407,20 +1615,41 @@ function ReceiptPage() {
   // Fallback: se a inscrição ainda não está na lista (ex.: recarregou antes do refresh),
   // tenta buscá-la direto no Supabase para evitar tela em branco.
   const [fetchedRegistration, setFetchedRegistration] = useState<Registration | null>(null);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function fetchFallback() {
-      if (registrations.some(r => r.id === registrationId) || !registrationId || isDemoMode || !supabase) return;
+      if (!registrationId || isDemoMode || !supabase) { setFetchAttempted(true); return; }
+      if (registrations.some(r => r.id === registrationId)) { setFetchAttempted(true); return; }
       try {
         const { data } = await supabase
           .from('registrations')
           .select('*')
           .eq('id', registrationId)
           .maybeSingle();
-        if (!cancelled && data) setFetchedRegistration(data);
+        if (!cancelled && data) {
+          setFetchedRegistration({
+            id: data.id,
+            userId: data.user_id ?? data.userId,
+            raceId: data.race_id ?? data.raceId,
+            distance: Number(data.distance ?? 0),
+            tshirtSize: data.tshirt_size ?? data.tshirtSize ?? '',
+            kitId: data.kit_id ?? data.kitId,
+            kitName: data.kit_name ?? data.kitName,
+            price: data.price != null ? Number(data.price) : undefined,
+            status: data.status,
+            paymentId: data.payment_id ?? data.paymentId,
+            confirmationCode: data.confirmation_code ?? data.confirmationCode ?? '',
+            createdAt: data.created_at ?? data.createdAt,
+            emergencyName: data.emergency_name ?? data.emergencyName ?? '',
+            emergencyPhone: data.emergency_phone ?? data.emergencyPhone ?? '',
+          });
+        }
       } catch (err) {
         console.error('Erro ao buscar inscrição:', err);
+      } finally {
+        if (!cancelled) setFetchAttempted(true);
       }
     }
     fetchFallback();
@@ -1431,10 +1660,45 @@ function ReceiptPage() {
   const race = registration ? getRaceById(registration.raceId) : null;
   const payment = registration ? getPaymentByRegistration(registration.id) : null;
 
-  if (!registration || !race || !payment || !user) return <div className="text-center py-20">Comprovante não encontrado</div>;
+  if (!registration && !fetchAttempted) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
+        <p className="ml-3 text-gray-600">Carregando comprovante...</p>
+      </div>
+    );
+  }
+
+  if (!registration || !race || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="font-bold text-slate-900 mb-1">Comprovante não encontrado</p>
+          <p className="text-sm text-slate-500 mb-4">Não foi possível carregar os dados desta inscrição.</p>
+          <button onClick={() => navigate('/minha-conta')} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+            Minhas inscrições
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!payment) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="font-bold text-slate-900 mb-1">Pagamento ainda não registrado</p>
+          <p className="text-sm text-slate-500 mb-4">Assim que o pagamento for confirmado, o comprovante aparecerá aqui.</p>
+          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+            Atualizar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleDownload = () => {
-    const content = `COMPROVANTE DE INSCRIÇÃO - SMART BRASIL TICKET\n\nCódigo: ${registration.confirmationCode}\n\nEVENTO\n${race.name}\nData: ${format(parseISO(race.date), "dd/MM/yyyy")}\nLocal: ${race.location}, ${race.city}/${race.state}\n\nINSCRITO\nNome: ${user.name}\nCPF: ${user.cpf}\n\nINSCRIÇÃO\nDistância: ${registration.distance}km\nCamiseta: Tam. ${registration.tshirtSize}\n\nPAGAMENTO\nMétodo: ${payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)\nTotal: R$ ${payment.total.toFixed(2).replace('.', ',')}\nStatus: APROVADO\nTransação: ${payment.transactionId}`;
+    const content = `COMPROVANTE DE INSCRIÇÃO - SMART BRASIL TICKET\n\nCódigo: ${registration.confirmationCode}\n\nEVENTO\n${race.name}\nData: ${format(parseISO(race.date), "dd/MM/yyyy")}\nLocal: ${race.location}, ${race.city}/${race.state}\n\nINSCRITO\nNome: ${user.name}\nCPF: ${user.cpf}\n\nINSCRIÇÃO\nDistância: ${registration.distance}km\nCamiseta: Tam. ${registration.tshirtSize}\n\nPAGAMENTO\nMétodo: ${payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)\nTotal: R$ ${formatBRL(payment.total)}\nStatus: APROVADO\nTransação: ${payment.transactionId}`;
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1491,8 +1755,8 @@ function ReceiptPage() {
               <h3 className="font-bold mb-3 flex items-center gap-2 text-slate-900"><CreditCard className="w-5 h-5 text-emerald-600" /> Pagamento</h3>
               <div className="bg-slate-50 rounded-lg p-4 space-y-2 border border-slate-200">
                 <div className="flex justify-between text-sm"><span className="text-slate-500">Método</span><span className="font-medium text-slate-900">{payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)</span></div>
-                <div className="flex justify-between text-sm"><span className="text-slate-500">Inscrição</span><span className="text-slate-900">R$ {payment.amount.toFixed(2).replace('.', ',')}</span></div>
-                <div className="flex justify-between pt-2 border-t border-slate-200"><span className="font-bold text-slate-900">Total</span><span className="font-bold text-xl text-emerald-600">R$ {payment.total.toFixed(2).replace('.', ',')}</span></div>
+                <div className="flex justify-between text-sm"><span className="text-slate-500">Inscrição</span><span className="text-slate-900">R$ {formatBRL(payment.amount)}</span></div>
+                <div className="flex justify-between pt-2 border-t border-slate-200"><span className="font-bold text-slate-900">Total</span><span className="font-bold text-xl text-emerald-600">R$ {formatBRL(payment.total)}</span></div>
                 <div className="flex justify-between text-sm"><span className="text-slate-500">Transação</span><span className="font-mono text-xs text-slate-700">{payment.transactionId}</span></div>
               </div>
             </div>
@@ -1702,7 +1966,7 @@ function AdminDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
               <div className="bg-white rounded-xl p-6 shadow-sm"><div className="flex items-center gap-3"><div className="p-2 bg-blue-100 rounded-lg"><Calendar className="w-5 h-5 text-blue-600" /></div><div><p className="text-2xl font-bold">{stats.totalEvents}</p><p className="text-xs text-gray-500">Eventos</p></div></div></div>
               <div className="bg-white rounded-xl p-6 shadow-sm"><div className="flex items-center gap-3"><div className="p-2 bg-green-100 rounded-lg"><Users className="w-5 h-5 text-green-600" /></div><div><p className="text-2xl font-bold">{stats.totalRegistrations}</p><p className="text-xs text-gray-500">Inscrições</p></div></div></div>
-              <div className="bg-white rounded-xl p-6 shadow-sm"><div className="flex items-center gap-3"><div className="p-2 bg-orange-100 rounded-lg"><DollarSign className="w-5 h-5 text-orange-600" /></div><div><p className="text-2xl font-bold">R$ {stats.totalRevenue.toFixed(0)}</p><p className="text-xs text-gray-500">Receita</p></div></div></div>
+              <div className="bg-white rounded-xl p-6 shadow-sm"><div className="flex items-center gap-3"><div className="p-2 bg-orange-100 rounded-lg"><DollarSign className="w-5 h-5 text-orange-600" /></div><div><p className="text-2xl font-bold">R$ {toSafeNumber(stats.totalRevenue).toFixed(0)}</p><p className="text-xs text-gray-500">Receita</p></div></div></div>
               <div className="bg-white rounded-xl p-6 shadow-sm"><div className="flex items-center gap-3"><div className="p-2 bg-yellow-100 rounded-lg"><AlertCircle className="w-5 h-5 text-yellow-600" /></div><div><p className="text-2xl font-bold">{stats.pendingPayments}</p><p className="text-xs text-gray-500">Pendentes</p></div></div></div>
             </div>
           </div>
@@ -1877,7 +2141,7 @@ function AdminDashboard() {
                     <tr key={payment.id}>
                       <td className="px-6 py-4 font-mono text-sm">{payment.id}</td>
                       <td className="px-6 py-4 text-sm capitalize">{payment.method === 'pix' ? 'PIX' : 'Cartão'}</td>
-                      <td className="px-6 py-4 text-sm font-semibold">R$ {payment.total.toFixed(2).replace('.', ',')}</td>
+                      <td className="px-6 py-4 text-sm font-semibold">R$ {formatBRL(payment.total)}</td>
                       <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${payment.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{payment.status === 'approved' ? 'Aprovado' : 'Pendente'}</span></td>
                       <td className="px-6 py-4 text-right">{payment.status === 'pending' && <button onClick={async () => {
                         try {
@@ -2046,18 +2310,20 @@ function App() {
     <Router>
       <AuthProvider>
         <DataProvider>
-          <Routes>
-            <Route path="/" element={<><Header /><HomePage /></>} />
-            <Route path="/evento/:id" element={<><Header /><RaceDetailsPage /></>} />
-            <Route path="/inscricao/:id" element={<RegistrationPage />} />
-            <Route path="/pagamento/:registrationId" element={<ProtectedRoute requiredRole="participant"><PaymentPage /></ProtectedRoute>} />
-            <Route path="/comprovante/:registrationId" element={<ProtectedRoute requiredRole="participant"><ReceiptPage /></ProtectedRoute>} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
-            <Route path="/minha-conta" element={<ProtectedRoute requiredRole="participant"><ParticipantDashboard /></ProtectedRoute>} />
-            <Route path="/diagnostico" element={<DiagnosticPage />} />
-            <Route path="/teste-supabase" element={<TestSupabase />} />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<><Header /><HomePage /></>} />
+              <Route path="/evento/:id" element={<><Header /><RaceDetailsPage /></>} />
+              <Route path="/inscricao/:id" element={<RegistrationPage />} />
+              <Route path="/pagamento/:registrationId" element={<ProtectedRoute requiredRole="participant"><PaymentPage /></ProtectedRoute>} />
+              <Route path="/comprovante/:registrationId" element={<ProtectedRoute requiredRole="participant"><ReceiptPage /></ProtectedRoute>} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/minha-conta" element={<ProtectedRoute requiredRole="participant"><ParticipantDashboard /></ProtectedRoute>} />
+              <Route path="/diagnostico" element={<DiagnosticPage />} />
+              <Route path="/teste-supabase" element={<TestSupabase />} />
+            </Routes>
+          </ErrorBoundary>
         </DataProvider>
       </AuthProvider>
     </Router>

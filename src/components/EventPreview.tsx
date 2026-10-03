@@ -118,7 +118,7 @@ export default function EventPreview({ data }: EventPreviewProps) {
                   key={i}
                   className="px-2 py-1 bg-emerald-50 text-emerald-700 text-xs font-medium rounded"
                 >
-                  {d.km}km - R$ {d.price.toFixed(2)}
+                  {d.km}km - R$ {Number(d.price || 0).toFixed(2)}
                 </span>
               ))}
               {data.distances.length > 3 && (
@@ -150,7 +150,7 @@ export default function EventPreview({ data }: EventPreviewProps) {
                     {kit.name}
                   </p>
                   <p className="text-xs font-bold text-emerald-600">
-                    R$ {kit.price.toFixed(2)}
+                    R$ {Number(kit.price || 0).toFixed(2)}
                   </p>
                 </div>
               ))}
@@ -170,7 +170,7 @@ export default function EventPreview({ data }: EventPreviewProps) {
           <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
             <span className="text-xs text-slate-500">A partir de</span>
             <span className="text-lg font-bold text-emerald-600">
-              R$ {Math.min(...data.distances.map(d => d.price)).toFixed(2)}
+              R$ {Math.min(...data.distances.map(d => Number(d.price) || 0)).toFixed(2)}
             </span>
           </div>
         )}

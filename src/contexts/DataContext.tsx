@@ -56,6 +56,13 @@ const SEED_PAYMENTS: Payment[] = [
   },
 ];
 
+// Normaliza qualquer valor vindo do banco (string NUMERIC, null, undefined)
+// para um número seguro de usar em cálculos e .toFixed() sem quebrar o render.
+function toNumeric(value: any): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 // Função para converter formato do Supabase para o app
 function convertRaceFromSupabase(race: any): Race {
   return {
@@ -83,8 +90,10 @@ function convertRaceFromSupabase(race: any): Race {
     featured: race.featured || false,
     discount: race.discount || 0,
     tags: race.tags || [],
-    distances: race.distances || [],
-    kits: race.kits || [],
+    // Garante que distâncias e kits vindos do JSON do banco tenham SEMPRE um
+    // preço numérico válido — evita crashes de .toFixed() com price null.
+    distances: (race.distances || []).map((d: any) => ({ ...d, price: toNumeric(d?.price) })),
+    kits: (race.kits || []).map((k: any) => ({ ...k, price: toNumeric(k?.price) })),
     shirtSizes: race.shirt_sizes || race.shirtSizes || ['PP', 'P', 'M', 'G', 'GG', 'XGG'],
     createdAt: race.created_at || race.createdAt,
   };
@@ -95,11 +104,14 @@ function convertRegistrationFromSupabase(reg: any): Registration {
     id: reg.id,
     userId: reg.user_id || reg.userId,
     raceId: reg.race_id || reg.raceId,
-    distance: reg.distance,
+    distance: Number(reg.distance ?? 0),
     tshirtSize: reg.tshirt_size || reg.tshirtSize,
     kitId: reg.kit_id || reg.kitId,
     kitName: reg.kit_name || reg.kitName,
-    price: reg.price ?? reg.price,
+    // Normaliza o preço para número (o Postgres pode retornar NUMERIC como string;
+    // se a coluna ainda não existir no banco, permanece undefined e o pagamento
+    // usa o preço do kit no evento como fallback)
+    price: reg.price != null && !isNaN(Number(reg.price)) ? Number(reg.price) : undefined,
     status: reg.status,
     paymentId: reg.payment_id || reg.paymentId,
     confirmationCode: reg.confirmation_code || reg.confirmationCode,
