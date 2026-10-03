@@ -26,6 +26,16 @@ export const supabase: SupabaseClient | null =
 // Check if running in demo mode (no Supabase configured)
 export const isDemoMode = !supabase;
 
+// URL/anon key efetivos do Supabase — usados pelas Edge Functions de pagamento.
+// Fallback hardcoded: se o build no Vercel rodar sem os env vars VITE_*, o
+// valor importado fica vazio e as chamadas às functions falham com "Failed to
+// fetch" (fetch para "/functions/v1/..."). Assim o fluxo nunca quebra por env.
+export const SUPABASE_URL_FALLBACK = 'https://pfrxuxiohxwhtcxvjnbd.supabase.co';
+export const supabaseUrlSafe: string =
+  (typeof supabaseUrl === 'string' && supabaseUrl.startsWith('http') ? supabaseUrl : SUPABASE_URL_FALLBACK).replace(/\/+$/, '');
+export const supabaseAnonKeySafe: string =
+  (typeof supabaseAnonKey === 'string' && supabaseAnonKey.length > 20 ? supabaseAnonKey : '');
+
 console.log('🔍 Supabase Status:', {
   client: supabase ? '✅ Criado' : '❌ Não criado',
   demoMode: isDemoMode ? '⚠️ MODO DEMO' : '✅ MODO PRODUÇÃO',

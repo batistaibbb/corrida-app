@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider, useData } from './contexts/DataContext';
 import { useState, useEffect, useRef, Component, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
-import { supabase, isDemoMode } from './lib/supabase';
+import { supabase, isDemoMode, supabaseUrlSafe, supabaseAnonKeySafe } from './lib/supabase';
 import DiagnosticPage from './pages/DiagnosticPage';
 import TestSupabase from './pages/TestSupabase';
 import EventForm from './components/EventForm';
@@ -1428,7 +1428,7 @@ function PaymentPage() {
   const confirmCheckoutPayment = async (mpPaymentId: string) => {
     const { data: sessionData } = await supabase!.auth.getSession();
     const accessToken = sessionData.session?.access_token;
-    const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/confirm-checkout-payment`;
+    const fnUrl = `${supabaseUrlSafe}/functions/v1/confirm-checkout-payment`;
     const res = await fetch(fnUrl, {
       method: 'POST',
       headers: {
@@ -1567,8 +1567,8 @@ function PaymentPage() {
     setProcessing(true);
     setMpError(null);
     try {
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      const supabaseUrl = supabaseUrlSafe;
+      const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string) || supabaseAnonKeySafe;
       let accessToken: string | undefined;
       try {
         const sessionRes = await supabase?.auth.getSession();
