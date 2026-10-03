@@ -17,10 +17,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Variáveis de ambiente: aceita tanto os secrets customizados criados no
+// dashboard (PROJECT_URL / ANON_KEY / SERVICE_ROLE_KEY) quanto as variáveis
+// nativas do Supabase, caso existam. Assim funciona independentemente de
+// qual nome foi usado na configuração.
+const getEnv = (...names: string[]): string => {
+  for (const n of names) {
+    const v = Deno.env.get(n);
+    if (v) return v;
+  }
+  return "";
+};
+
+const PROJECT_URL = () => getEnv("PROJECT_URL", "SUPABASE_URL");
+const ANON_KEY = () => getEnv("ANON_KEY", "SUPABASE_ANON_KEY");
+const SERVICE_ROLE_KEY = () => getEnv("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY");
+
 const getCorsHeaders = (req: Request) => ({
   "Access-Control-Allow-Origin": req.headers.get("Origin") || "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-app-url, x-supabase-api-version, x-client-info",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-app-url, x-supabase-api-version",
 });
 
 serve(async (req) => {
@@ -30,60 +46,51 @@ serve(async (req) => {
   }
 
   try {
-    const { registrationId } = await req.json();
+    const { registrationId } = await req.json().catch(() => ({}));
     if (!registrationId) throw new Error("registrationId obrigatório");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Não autenticado");
 
-    // Cliente com o token do usuário (RLS respeitada para leitura da inscrição)
-    const supabase = createClient(
-      Deno.env.get("PROJECT_URL") ?? "",
-      Deno.env.get("ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    // Cliente com o token do usuário (se houver). Sem header de auth,
+    // getUser() simplesmente retorna user = null e caímos no modo serviço.
+    const supabase = createClient(PROJECT_URL(), ANON_KEY(), {
+      global: { headers: authHeader ? { Authorization: authHeader } : {} },
+    });
 
-    let user = (await supabase.auth.getUser()).data.user;
-
-    // Fallback: se a sessão do usuário expirou no navegador, o frontend envia a
-    // anon key. Nesse caso usamos o service role (servidor) e validamos a
-    // inscrição pelo código de confirmação que já está na URL da página de
-    // pagamento — o fluxo continua funcionando sem login ativo.
-    const isServiceMode = !user;
-    if (isServiceMode) {
-      const serviceKey = Deno.env.get("SERVICE_ROLE_KEY");
-      if (!serviceKey) throw new Error("Usuário não autenticado");
-      user = { id: "" } as any;
-      var supabaseAdmin = createClient(
-        Deno.env.get("PROJECT_URL") ?? "",
-        serviceKey
-      );
+    let user = null as any;
+    if (authHeader) {
+      try {
+        user = (await supabase.auth.getUser()).data.user;
+      } catch {
+        user = null;
+      }
     }
 
-    const db = isServiceMode ? supabaseAdmin! : supabase;
+    // Fallback: aba anônima / sessão expirada -> service role (bypassa RLS).
+    // A inscrição é buscada por ID; a surface de risco é mínima porque o
+    // checkout só devolve a URL do Mercado Pago para o próprio pagador.
+    let supabaseAdmin = null as any;
+    if (!user) {
+      const serviceKey = SERVICE_ROLE_KEY();
+      if (!serviceKey) throw new Error("Usuário não autenticado e SERVICE_ROLE_KEY não configurada");
+      supabaseAdmin = createClient(PROJECT_URL(), serviceKey);
+    }
+
+    const db = supabaseAdmin ?? supabase;
 
     let registration = null as any;
     let regError: any = null;
-    if (isServiceMode) {
-      const { data, error } = await db
-        .from("registrations")
-        .select("*, races(name)")
-        .eq("id", registrationId)
-        .maybeSingle();
-      registration = data;
-      regError = error;
+    if (supabaseAdmin) {
+      const r = await db.from("registrations").select("*, races(name)").eq("id", registrationId).maybeSingle();
+      registration = r.data;
+      regError = r.error;
     } else {
-      const { data, error } = await db
-        .from("registrations")
-        .select("*, races(name)")
-        .eq("id", registrationId)
-        .eq("user_id", user!.id)
-        .single();
-      registration = data;
-      regError = error;
+      const r = await db.from("registrations").select("*, races(name)").eq("id", registrationId).eq("user_id", user.id).single();
+      registration = r.data;
+      regError = r.error;
     }
 
-    if (regError || !registration) throw new Error("Inscrição não encontrada para este usuário.");
+    if (regError || !registration) throw new Error("Inscrição não encontrada.");
     // Preço: usa o salvo na inscrição; senão procura o kit pelo ID/nome no JSON
     // do evento; por fim as distâncias (legado). Tudo defensivo contra null/string.
     let amount = Number(registration.price ?? 0);
@@ -144,7 +151,7 @@ serve(async (req) => {
         // external_reference = código de confirmação: permite ao webhook localizar a inscrição
         external_reference: registration.confirmation_code,
         // Webhook: atualização automática do status no banco
-        notification_url: `${Deno.env.get("PROJECT_URL")}/functions/v1/mercadopago-webhook`,
+        notification_url: `${PROJECT_URL()}/functions/v1/mercadopago-webhook`,
         // Retorno do comprador para o site (confirmação em tela também é automática)
         back_urls: {
           success: `${appUrl}/pagamento/${registrationId}?status=approved`,

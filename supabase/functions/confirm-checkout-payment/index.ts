@@ -11,6 +11,19 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Variáveis de ambiente: aceita secrets customizados (PROJECT_URL / ANON_KEY /
+// SERVICE_ROLE_KEY) e as variáveis nativas do Supabase como fallback.
+const getEnv = (...names: string[]): string => {
+  for (const n of names) {
+    const v = Deno.env.get(n);
+    if (v) return v;
+  }
+  return "";
+};
+const PROJECT_URL = () => getEnv("PROJECT_URL", "SUPABASE_URL");
+const ANON_KEY = () => getEnv("ANON_KEY", "SUPABASE_ANON_KEY");
+const SERVICE_ROLE_KEY = () => getEnv("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY");
+
 const getCorsHeaders = (req: Request) => ({
   "Access-Control-Allow-Origin": req.headers.get("Origin") || "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -28,25 +41,43 @@ serve(async (req) => {
     if (!registrationId || !mpPaymentId) throw new Error("registrationId e mpPaymentId obrigatórios");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("Não autenticado");
 
-    const supabase = createClient(
-      Deno.env.get("PROJECT_URL") ?? "",
-      Deno.env.get("ANON_KEY") ?? "",
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabase = createClient(PROJECT_URL(), ANON_KEY(), {
+      global: { headers: authHeader ? { Authorization: authHeader } : {} },
+    });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("Usuário não autenticado");
+    let user = null as any;
+    if (authHeader) {
+      try {
+        user = (await supabase.auth.getUser()).data.user;
+      } catch {
+        user = null;
+      }
+    }
 
-    // Confirma que a inscrição pertence ao usuário
-    const { data: registration, error: regError } = await supabase
-      .from("registrations")
-      .select("id, status, payment_id")
-      .eq("id", registrationId)
-      .eq("user_id", user.id)
-      .single();
-    if (regError || !registration) throw new Error("Inscrição não encontrada");
+    // Admin client (service role): usado tanto para a leitura quanto para os
+    // updates — permite o fluxo em aba anônima/sessão expirada. Idempotente:
+    // só confirma pagamentos realmente aprovados na API do MP.
+    const admin = createClient(PROJECT_URL(), SERVICE_ROLE_KEY());
+
+    let registration = null as any;
+    if (user) {
+      const { data } = await admin
+        .from("registrations")
+        .select("id, status, payment_id")
+        .eq("id", registrationId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      registration = data;
+    } else {
+      const { data } = await admin
+        .from("registrations")
+        .select("id, status, payment_id")
+        .eq("id", registrationId)
+        .maybeSingle();
+      registration = data;
+    }
+    if (!registration) throw new Error("Inscrição não encontrada");
 
     // Já confirmada (webhook chegou antes) -> idempotente
     if (registration.status === "confirmed") {
@@ -69,12 +100,6 @@ serve(async (req) => {
         status: 200,
       });
     }
-
-    // Client com service role para garantir o update mesmo com RLS restritiva
-    const admin = createClient(
-      Deno.env.get("PROJECT_URL") ?? "",
-      Deno.env.get("SERVICE_ROLE_KEY") ?? ""
-    );
 
     const paidAt = payment.date_approved || new Date().toISOString();
 

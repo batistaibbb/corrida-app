@@ -10,6 +10,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Variáveis de ambiente: aceita secrets customizados (PROJECT_URL /
+// SERVICE_ROLE_KEY) e as variáveis nativas do Supabase como fallback.
+const getEnv = (...names: string[]): string => {
+  for (const n of names) {
+    const v = Deno.env.get(n);
+    if (v) return v;
+  }
+  return "";
+};
+const PROJECT_URL = () => getEnv("PROJECT_URL", "SUPABASE_URL");
+const SERVICE_ROLE_KEY = () => getEnv("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY");
+
 const getCorsHeaders = (req: Request) => ({
   "Access-Control-Allow-Origin": req.headers.get("Origin") || "*",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
@@ -70,10 +82,7 @@ serve(async (req) => {
     }
 
     // Initialize Supabase client with service role (bypasses RLS)
-    const supabase = createClient(
-      Deno.env.get("PROJECT_URL") ?? "",
-      Deno.env.get("SERVICE_ROLE_KEY") ?? ""
-    );
+    const supabase = createClient(PROJECT_URL(), SERVICE_ROLE_KEY());
 
     // Get payment details from Mercado Pago API
     const mercadopagoAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
