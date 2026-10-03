@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider, useData } from './contexts/DataContext';
-import { useState, useEffect, ReactNode } from 'react';
+import { useState, useEffect, Component, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
 import { supabase, isDemoMode } from './lib/supabase';
 import DiagnosticPage from './pages/DiagnosticPage';
@@ -96,6 +96,47 @@ function ProtectedRoute({ children, requiredRole }: { children: ReactNode; requi
     </div>;
   }
   return <>{children}</>;
+}
+
+// ============ ERROR BOUNDARY ============
+// Captura erros de render (ex.: dados incompletos vindos do banco) e mostra um
+// estado claro em vez de deixar a tela completamente em branco.
+
+type ErrorBoundaryProps = { children: ReactNode };
+type ErrorBoundaryState = { error: Error | null };
+
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: any) {
+    console.error('Erro capturado pelo ErrorBoundary:', error, info);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
+            <p className="font-bold text-slate-900 mb-1">Algo deu errado nesta tela</p>
+            <p className="text-sm text-slate-500 mb-4 break-words">{String(this.state.error?.message || this.state.error)}</p>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => window.location.reload()} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+                Recarregar página
+              </button>
+              <button onClick={() => { window.location.href = '/'; }} className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700">
+                Voltar para o início
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 // ============ PAGES ============
@@ -1179,37 +1220,113 @@ function RegistrationPage() {
 function PaymentPage() {
   const { registrationId } = useParams();
   const { user } = useAuth();
-  const { registrations, getRaceById, addPayment, updateRegistration } = useData();
+  const { registrations, races, getRaceById, addPayment, updateRegistration } = useData();
   const navigate = useNavigate();
   // Fallback: se a inscrição ainda não estiver na lista em memória (ex.: recarregamento
-  // da página antes do refresh dos dados), busca direto no Supabase para evitar tela em branco.
+  // da página, realtime atrasado ou falha de sync), busca direto no Supabase para
+  // evitar tela em branco.
   const [fetchedRegistration, setFetchedRegistration] = useState<Registration | null>(null);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
+  const [fetchedRace, setFetchedRace] = useState<Race | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function fetchFallback() {
-      if (registrations.some(r => r.id === registrationId) || !registrationId || isDemoMode || !supabase) return;
+      if (!registrationId || isDemoMode || !supabase) { setFetchAttempted(true); return; }
+      if (registrations.some(r => r.id === registrationId)) { setFetchAttempted(true); return; }
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('registrations')
           .select('*')
           .eq('id', registrationId)
           .maybeSingle();
-        if (!cancelled && data) setFetchedRegistration(data);
+        if (error) console.error('Erro ao buscar inscrição:', error);
+        if (!cancelled && data) {
+          setFetchedRegistration({
+            id: data.id,
+            userId: data.user_id ?? data.userId,
+            raceId: data.race_id ?? data.raceId,
+            distance: Number(data.distance ?? 0),
+            tshirtSize: data.tshirt_size ?? data.tshirtSize ?? '',
+            kitId: data.kit_id ?? data.kitId,
+            kitName: data.kit_name ?? data.kitName,
+            price: data.price != null ? Number(data.price) : undefined,
+            status: data.status,
+            paymentId: data.payment_id ?? data.paymentId,
+            confirmationCode: data.confirmation_code ?? data.confirmationCode ?? '',
+            createdAt: data.created_at ?? data.createdAt,
+            emergencyName: data.emergency_name ?? data.emergencyName ?? '',
+            emergencyPhone: data.emergency_phone ?? data.emergencyPhone ?? '',
+          });
+        }
       } catch (err) {
         console.error('Erro ao buscar inscrição:', err);
+      } finally {
+        if (!cancelled) setFetchAttempted(true);
       }
     }
     fetchFallback();
     return () => { cancelled = true; };
   }, [registrationId, registrations]);
 
-  const registration = registrations.find(r => r.id === registrationId) || fetchedRegistration;
-  const race = registration ? getRaceById(registration.raceId) : null;
-  // Preço vem do kit selecionado na inscrição; distances é apenas fallback
-  const kitPrice = registration?.price || (race?.kits?.find(k => k.id === registration?.kitId)?.price ?? 0);
-  const distancePrice = kitPrice || race?.distances?.find(d => d.km === registration?.distance)?.price || 0;
-  const total = distancePrice;
+  // Fallback para o evento: se a inscrição foi buscada direto do banco mas o evento
+  // correspondente ainda não está na lista em memória, busca o evento também.
+  const regForLookup = registrations.find(r => r.id === registrationId) || fetchedRegistration;
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchRace() {
+      const raceId = regForLookup?.raceId;
+      if (!raceId || isDemoMode || !supabase) return;
+      if (races.some(r => r.id === raceId)) return;
+      try {
+        const { data } = await supabase.from('races').select('*').eq('id', raceId).maybeSingle();
+        if (!cancelled && data) {
+          setFetchedRace({
+            ...data,
+            image: data.image_url || data.image,
+            organizer: data.organizer_name || data.organizer,
+            organizerId: data.organizer_id || data.organizerId,
+            participants: data.participants_count || data.participants || 0,
+            maxParticipants: data.max_participants || data.maxParticipants || 1000,
+            registrationStatus: data.registration_status || 'upcoming',
+            includes: data.includes || [],
+            rules: data.rules || [],
+            rating: data.rating || 0,
+            reviews: data.reviews_count || data.reviews || 0,
+            tags: data.tags || [],
+            distances: data.distances || [],
+            kits: data.kits || [],
+            shirtSizes: data.shirt_sizes || ['PP', 'P', 'M', 'G', 'GG', 'XGG'],
+            createdAt: data.created_at,
+          } as Race);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar evento:', err);
+      }
+    }
+    fetchRace();
+    return () => { cancelled = true; };
+  }, [regForLookup?.raceId, races]);
+
+  const registration = regForLookup;
+  const race = registration ? (getRaceById(registration.raceId) || (fetchedRace?.id === registration.raceId ? fetchedRace : null)) : null;
+
+  // Preço: prioriza o preço salvo na inscrição; senão procura o kit pelo ID OU pelo
+  // nome (o kit pode ter sido recriado/renumerado pelo admin após a inscrição);
+  // por fim tenta as distâncias como legado. Sempre normaliza para número.
+  const findKitPrice = (): number => {
+    const kits: any[] = race?.kits || [];
+    const byId = kits.find(k => k.id === registration?.kitId);
+    const byName = registration?.kitName ? kits.find(k => k.name === registration.kitName) : undefined;
+    const kit = byId || byName;
+    return kit ? Number(kit.price) || 0 : 0;
+  };
+  const rawPrice = registration?.price != null ? Number(registration.price) : NaN;
+  const kitPrice = (!isNaN(rawPrice) && rawPrice > 0)
+    ? rawPrice
+    : findKitPrice() || Number(race?.distances?.find(d => d.km === registration?.distance)?.price) || 0;
+  const total = kitPrice;
+  const distancePrice = kitPrice;
 
   const [selectedMethod, setSelectedMethod] = useState<'pix' | 'credit_card' | 'debit_card' | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -1218,7 +1335,18 @@ function PaymentPage() {
   const [paymentId, setPaymentId] = useState<string | null>(null);
   const [cardData, setCardData] = useState({ number: '', name: '', expiry: '', cvv: '', installments: '1' });
 
-  if (!registration || !race || !user) {
+  // Enquanto o fallback de busca está em andamento, mostra carregamento (evita
+  // "piscar" a tela de erro e depois sumir).
+  if (!registration && !fetchAttempted) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
+        <p className="ml-3 text-gray-600">Carregando sua inscrição...</p>
+      </div>
+    );
+  }
+
+  if (!registration || !user) {
     // Em vez de sumir a tela, mostra um estado claro com ação de voltar
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -1228,6 +1356,25 @@ function PaymentPage() {
           <button onClick={() => navigate(-1)} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
             Voltar
           </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!race) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="font-bold text-slate-900 mb-1">Evento não encontrado</p>
+          <p className="text-sm text-slate-500 mb-4">O evento desta inscrição não pôde ser carregado. Verifique sua conexão e tente novamente.</p>
+          <div className="flex gap-2 justify-center">
+            <button onClick={() => window.location.reload()} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+              Tentar novamente
+            </button>
+            <button onClick={() => navigate('/')} className="px-4 py-2 border border-slate-300 rounded-lg text-slate-700">
+              Voltar ao início
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -1407,20 +1554,41 @@ function ReceiptPage() {
   // Fallback: se a inscrição ainda não está na lista (ex.: recarregou antes do refresh),
   // tenta buscá-la direto no Supabase para evitar tela em branco.
   const [fetchedRegistration, setFetchedRegistration] = useState<Registration | null>(null);
+  const [fetchAttempted, setFetchAttempted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     async function fetchFallback() {
-      if (registrations.some(r => r.id === registrationId) || !registrationId || isDemoMode || !supabase) return;
+      if (!registrationId || isDemoMode || !supabase) { setFetchAttempted(true); return; }
+      if (registrations.some(r => r.id === registrationId)) { setFetchAttempted(true); return; }
       try {
         const { data } = await supabase
           .from('registrations')
           .select('*')
           .eq('id', registrationId)
           .maybeSingle();
-        if (!cancelled && data) setFetchedRegistration(data);
+        if (!cancelled && data) {
+          setFetchedRegistration({
+            id: data.id,
+            userId: data.user_id ?? data.userId,
+            raceId: data.race_id ?? data.raceId,
+            distance: Number(data.distance ?? 0),
+            tshirtSize: data.tshirt_size ?? data.tshirtSize ?? '',
+            kitId: data.kit_id ?? data.kitId,
+            kitName: data.kit_name ?? data.kitName,
+            price: data.price != null ? Number(data.price) : undefined,
+            status: data.status,
+            paymentId: data.payment_id ?? data.paymentId,
+            confirmationCode: data.confirmation_code ?? data.confirmationCode ?? '',
+            createdAt: data.created_at ?? data.createdAt,
+            emergencyName: data.emergency_name ?? data.emergencyName ?? '',
+            emergencyPhone: data.emergency_phone ?? data.emergencyPhone ?? '',
+          });
+        }
       } catch (err) {
         console.error('Erro ao buscar inscrição:', err);
+      } finally {
+        if (!cancelled) setFetchAttempted(true);
       }
     }
     fetchFallback();
@@ -1431,7 +1599,42 @@ function ReceiptPage() {
   const race = registration ? getRaceById(registration.raceId) : null;
   const payment = registration ? getPaymentByRegistration(registration.id) : null;
 
-  if (!registration || !race || !payment || !user) return <div className="text-center py-20">Comprovante não encontrado</div>;
+  if (!registration && !fetchAttempted) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
+        <p className="ml-3 text-gray-600">Carregando comprovante...</p>
+      </div>
+    );
+  }
+
+  if (!registration || !race || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="font-bold text-slate-900 mb-1">Comprovante não encontrado</p>
+          <p className="text-sm text-slate-500 mb-4">Não foi possível carregar os dados desta inscrição.</p>
+          <button onClick={() => navigate('/minha-conta')} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+            Minhas inscrições
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!payment) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <p className="font-bold text-slate-900 mb-1">Pagamento ainda não registrado</p>
+          <p className="text-sm text-slate-500 mb-4">Assim que o pagamento for confirmado, o comprovante aparecerá aqui.</p>
+          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-sky-600 text-white rounded-lg font-medium">
+            Atualizar
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const handleDownload = () => {
     const content = `COMPROVANTE DE INSCRIÇÃO - SMART BRASIL TICKET\n\nCódigo: ${registration.confirmationCode}\n\nEVENTO\n${race.name}\nData: ${format(parseISO(race.date), "dd/MM/yyyy")}\nLocal: ${race.location}, ${race.city}/${race.state}\n\nINSCRITO\nNome: ${user.name}\nCPF: ${user.cpf}\n\nINSCRIÇÃO\nDistância: ${registration.distance}km\nCamiseta: Tam. ${registration.tshirtSize}\n\nPAGAMENTO\nMétodo: ${payment.method === 'pix' ? 'PIX' : 'Cartão'} (Mercado Pago)\nTotal: R$ ${payment.total.toFixed(2).replace('.', ',')}\nStatus: APROVADO\nTransação: ${payment.transactionId}`;
@@ -2046,18 +2249,20 @@ function App() {
     <Router>
       <AuthProvider>
         <DataProvider>
-          <Routes>
-            <Route path="/" element={<><Header /><HomePage /></>} />
-            <Route path="/evento/:id" element={<><Header /><RaceDetailsPage /></>} />
-            <Route path="/inscricao/:id" element={<RegistrationPage />} />
-            <Route path="/pagamento/:registrationId" element={<ProtectedRoute requiredRole="participant"><PaymentPage /></ProtectedRoute>} />
-            <Route path="/comprovante/:registrationId" element={<ProtectedRoute requiredRole="participant"><ReceiptPage /></ProtectedRoute>} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
-            <Route path="/minha-conta" element={<ProtectedRoute requiredRole="participant"><ParticipantDashboard /></ProtectedRoute>} />
-            <Route path="/diagnostico" element={<DiagnosticPage />} />
-            <Route path="/teste-supabase" element={<TestSupabase />} />
-          </Routes>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/" element={<><Header /><HomePage /></>} />
+              <Route path="/evento/:id" element={<><Header /><RaceDetailsPage /></>} />
+              <Route path="/inscricao/:id" element={<RegistrationPage />} />
+              <Route path="/pagamento/:registrationId" element={<ProtectedRoute requiredRole="participant"><PaymentPage /></ProtectedRoute>} />
+              <Route path="/comprovante/:registrationId" element={<ProtectedRoute requiredRole="participant"><ReceiptPage /></ProtectedRoute>} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/minha-conta" element={<ProtectedRoute requiredRole="participant"><ParticipantDashboard /></ProtectedRoute>} />
+              <Route path="/diagnostico" element={<DiagnosticPage />} />
+              <Route path="/teste-supabase" element={<TestSupabase />} />
+            </Routes>
+          </ErrorBoundary>
         </DataProvider>
       </AuthProvider>
     </Router>
