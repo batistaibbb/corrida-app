@@ -36,13 +36,22 @@ const SERVICE_ROLE_KEY = () => getEnv("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE
 const getCorsHeaders = (req: Request) => ({
   "Access-Control-Allow-Origin": req.headers.get("Origin") || "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-app-url, x-supabase-api-version",
+  // IMPORTANTE: a lista abaixo precisa cobrir TODO header enviado pelo navegador.
+  // O SDK do Supabase envia automaticamente "x-supabase-access-token" quando há
+  // sessão ativa — se ele não estiver autorizado no preflight, o CORS bloqueia a
+  // requisição e o site mostra "Não foi possível conectar ao servidor".
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-app-url, x-supabase-api-version, x-supabase-access-token, x-canonical-url, x-session-id",
 });
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
+    // max-age cacheia o preflight por 1 dia, reduzindo travas de CORS repetidas
+    return new Response(null, {
+      status: 204,
+      headers: { ...corsHeaders, "Access-Control-Max-Age": "86400" },
+    });
   }
 
   try {
