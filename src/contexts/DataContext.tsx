@@ -117,6 +117,11 @@ function convertRegistrationFromSupabase(reg: any): Registration {
     confirmationCode: reg.confirmation_code || reg.confirmationCode,
     emergencyName: reg.emergency_name || reg.emergencyName,
     emergencyPhone: reg.emergency_phone || reg.emergencyPhone,
+    participantFirstName: reg.participant_first_name ?? reg.participantFirstName,
+    participantLastName: reg.participant_last_name ?? reg.participantLastName,
+    participantEmail: reg.participant_email ?? reg.participantEmail,
+    participantPhone: reg.participant_phone ?? reg.participantPhone,
+    participantCpf: reg.participant_cpf ?? reg.participantCpf,
     createdAt: reg.created_at || reg.createdAt,
   };
 }
@@ -431,6 +436,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (reg.kitName) insertData.kit_name = reg.kitName;
       // Persistir o preço do kit escolhido para o fluxo de pagamento
       if (reg.price !== undefined) insertData.price = reg.price;
+      // Dados do participante coletados no formulário (relatório admin / distribuição de kits)
+      if (reg.participantFirstName) insertData.participant_first_name = reg.participantFirstName;
+      if (reg.participantLastName) insertData.participant_last_name = reg.participantLastName;
+      if (reg.participantEmail) insertData.participant_email = reg.participantEmail;
+      if (reg.participantPhone) insertData.participant_phone = reg.participantPhone;
+      if (reg.participantCpf) insertData.participant_cpf = reg.participantCpf;
       
       const { data, error } = await supabase
         .from('registrations')
