@@ -1490,35 +1490,6 @@ function PaymentPage() {
   // ============================================
   // INICIAR CHECKOUT MERCADO PAGO (produção)
   // ============================================
-  const startMercadoPagoCheckout = async () => {
-    setProcessing(true);
-    setMpError(null);
-    try {
-      const { data: sessionData } = await supabase!.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-      const fnUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-payment`;
-      const res = await fetch(fnUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          'x-app-url': window.location.origin,
-        },
-        body: JSON.stringify({ registrationId: registration!.id }),
-      });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok || json?.error || !json?.checkoutUrl) {
-        throw new Error(json?.error || `Falha ao iniciar checkout (HTTP ${res.status})`);
-      }
-      // Redireciona para o checkout oficial do Mercado Pago.
-      // Ao concluir, o MP devolve o usuário para /pagamento/:id?status=... e o
-      // webhook atualiza o banco automaticamente em paralelo.
-      window.location.href = json.checkoutUrl;
-    } catch (err: any) {
-      setMpError(err?.message || 'Não foi possível iniciar o pagamento. Tente novamente.');
-      setProcessing(false);
-    }
-  };
 
   // Enquanto o fallback de busca está em andamento, mostra carregamento (evita
   // "piscar" a tela de erro e depois sumir).
@@ -1592,47 +1563,70 @@ function PaymentPage() {
 
   const pixCode = `00020126580014br.gov.bcb.pix0136${registration.confirmationCode}520400005303986540${toSafeNumber(total).toFixed(2)}5802BR5925SMARTBRASIL6009SAO PAULO6304ABCD`;
 
-  const handlePixPayment = async () => {
+  const openMercadoPagoCheckout = async () => {
     setProcessing(true);
-    setTimeout(async () => {
-      const id = await addPayment({
-        registrationId: registration.id,
-        method: 'pix',
-        amount: distancePrice,
-        serviceFee: 0,
-        total,
-        status: 'pending',
-        pixCode,
-        transactionId: `MP-PIX-${Date.now()}`,
+    setMpError(null);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+      let accessToken: string | undefined;
+      try {
+        const sessionRes = await supabase?.auth.getSession();
+        accessToken = sessionRes?.data?.session?.access_token;
+      } catch { /* segue com anon key */ }
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/create-checkout-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken || anonKey}`,
+          'x-app-url': window.location.origin,
+        },
+        body: JSON.stringify({ registrationId: registration!.id }),
       });
-      setPaymentId(id);
-      setPixGenerated(true);
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.error || !json?.checkoutUrl) {
+        throw new Error(json?.error || `Falha ao iniciar checkout no Mercado Pago (HTTP ${res.status})`);
+      }
+      // Redireciona para o checkout oficial do Mercado Pago.
+      // Ao concluir, o MP devolve o usuário para /pagamento/:id?status=... e o
+      // webhook atualiza o banco automaticamente em paralelo.
+      window.location.href = json.checkoutUrl;
+    } catch (err: any) {
+      setMpError(err?.message || 'Não foi possível iniciar o pagamento. Tente novamente.');
       setProcessing(false);
-    }, 1500);
+    }
   };
 
-  const handleCardPayment = async () => {
-    if (!cardData.number || !cardData.name || !cardData.expiry || !cardData.cvv) {
-      alert('Preencha todos os dados do cartão');
+  const handlePixPayment = openMercadoPagoCheckout;
+  const handleCardPayment = () => {
+    if (isDemoMode) {
+      // Sem backend real: mantém o fluxo de demonstração local
+      if (!cardData.number || !cardData.name || !cardData.expiry || !cardData.cvv) {
+        alert('Preencha todos os dados do cartão');
+        return;
+      }
+      setProcessing(true);
+      setTimeout(async () => {
+        const method = cardData.installments === '1' ? 'debit_card' : 'credit_card';
+        const id = await addPayment({
+          registrationId: registration.id,
+          method,
+          amount: distancePrice,
+          serviceFee: 0,
+          total,
+          status: 'approved',
+          transactionId: `MP-CARD-${Date.now()}`,
+          paidAt: new Date().toISOString(),
+        });
+        await updateRegistration(registration.id, { status: 'confirmed', paymentId: id });
+        setProcessing(false);
+        navigate(`/comprovante/${registration.id}`);
+      }, 2000);
       return;
     }
-    setProcessing(true);
-    setTimeout(async () => {
-      const method = cardData.installments === '1' ? 'debit_card' : 'credit_card';
-      const id = await addPayment({
-        registrationId: registration.id,
-        method,
-        amount: distancePrice,
-        serviceFee: 0,
-        total,
-        status: 'approved',
-        transactionId: `MP-CARD-${Date.now()}`,
-        paidAt: new Date().toISOString(),
-      });
-      await updateRegistration(registration.id, { status: 'confirmed', paymentId: id });
-      setProcessing(false);
-      navigate(`/comprovante/${registration.id}`);
-    }, 2000);
+    // Produção: o Checkout Pro do MP cuida do PIX/cartão (dados de cartão nunca passam pelo site)
+    openMercadoPagoCheckout();
   };
 
   const simulatePixApproval = () => {
@@ -1690,7 +1684,32 @@ function PaymentPage() {
                 )}
                 <h2 className="font-bold mb-4">Forma de Pagamento</h2>
 
-                {isDemoMode ? (
+                {!isDemoMode ? (
+                  <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                  <button onClick={() => setSelectedMethod('pix')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'pix' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
+                    <QrCode className={`w-5 h-5 mb-2 ${selectedMethod === 'pix' ? 'text-emerald-600' : 'text-gray-500'}`} />
+                    <p className="font-bold text-sm">PIX</p>
+                    <p className="text-xs text-gray-500">Aprovação instantânea via Mercado Pago</p>
+                  </button>
+                  <button onClick={() => setSelectedMethod('credit_card')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'credit_card' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
+                    <CreditCard className={`w-5 h-5 mb-2 ${selectedMethod === 'credit_card' ? 'text-emerald-600' : 'text-gray-500'}`} />
+                    <p className="font-bold text-sm">Cartão de Crédito</p>
+                    <p className="text-xs text-gray-500">Até 12x — checkout seguro Mercado Pago</p>
+                  </button>
+                </div>
+
+                {selectedMethod && (
+                  <button onClick={openMercadoPagoCheckout} disabled={processing || mpConfirming} className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 hover:from-emerald-700 hover:to-sky-700 transition-all">
+                    <Shield className="w-4 h-4" />
+                    {processing ? 'Redirecionando para o Mercado Pago...' : `Pagar R$ ${formatBRL(total)} com ${selectedMethod === 'pix' ? 'PIX' : 'Cartão'}`}
+                  </button>
+                )}
+                <p className="text-xs text-slate-400 mt-3 text-center">
+                  Você será redirecionado para o ambiente seguro do Mercado Pago. Ao concluir, volta automaticamente e a inscrição é confirmada sem ação manual.
+                </p>
+                  </>
+                ) : (
                   <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
                   <button onClick={() => setSelectedMethod('pix')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'pix' ? 'border-orange-500 bg-orange-50' : 'border-gray-200'}`}>
@@ -1733,31 +1752,6 @@ function PaymentPage() {
                     </button>
                   </div>
                 )}
-                  </>
-                ) : (
-                  <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                  <button onClick={() => setSelectedMethod('pix')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'pix' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
-                    <QrCode className={`w-5 h-5 mb-2 ${selectedMethod === 'pix' ? 'text-emerald-600' : 'text-gray-500'}`} />
-                    <p className="font-bold text-sm">PIX</p>
-                    <p className="text-xs text-gray-500">Aprovação instantânea via Mercado Pago</p>
-                  </button>
-                  <button onClick={() => setSelectedMethod('credit_card')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'credit_card' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
-                    <CreditCard className={`w-5 h-5 mb-2 ${selectedMethod === 'credit_card' ? 'text-emerald-600' : 'text-gray-500'}`} />
-                    <p className="font-bold text-sm">Cartão de Crédito</p>
-                    <p className="text-xs text-gray-500">Até 12x — checkout seguro Mercado Pago</p>
-                  </button>
-                </div>
-
-                {selectedMethod && (
-                  <button onClick={startMercadoPagoCheckout} disabled={processing || mpConfirming} className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 hover:from-emerald-700 hover:to-sky-700 transition-all">
-                    <Shield className="w-4 h-4" />
-                    {processing ? 'Redirecionando para o Mercado Pago...' : `Pagar R$ ${formatBRL(total)} com ${selectedMethod === 'pix' ? 'PIX' : 'Cartão'}`}
-                  </button>
-                )}
-                <p className="text-xs text-slate-400 mt-3 text-center">
-                  Você será redirecionado para o ambiente seguro do Mercado Pago. Ao concluir, volta automaticamente e a inscrição é confirmada sem ação manual.
-                </p>
                   </>
                 )}
               </div>
