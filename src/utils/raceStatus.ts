@@ -29,10 +29,16 @@ export function isEventVisible(race: Race): boolean {
 }
 
 /**
- * Verifica se é possível se inscrever no evento
+ * Verifica se é possível se inscrever no evento.
+ * Auditoria UX P1: além de published/registrationStatus, bloqueia eventos com
+ * data já passada — o status derivado (getRegistrationStatus) mostra "Encerrado",
+ * mas sem este check o botão de inscrição continuava ativo via campo cru do banco.
  */
 export function canRegister(race: Race): boolean {
-  return race.published && race.registrationStatus === 'upcoming';
+  if (!race.published || race.registrationStatus !== 'upcoming') return false;
+  const eventDate = new Date(race.date);
+  if (!isNaN(eventDate.getTime()) && eventDate < new Date()) return false;
+  return true;
 }
 
 /**

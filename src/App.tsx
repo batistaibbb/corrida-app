@@ -1,11 +1,9 @@
-import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider, useData } from './contexts/DataContext';
 import { useState, useEffect, useRef, Component, ReactNode } from 'react';
 import { Race, Registration, Payment } from './types';
 import { supabase, isDemoMode, supabaseUrlSafe, supabaseAnonKeySafe } from './lib/supabase';
-import DiagnosticPage from './pages/DiagnosticPage';
-import TestSupabase from './pages/TestSupabase';
 import EventForm from './components/EventForm';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -1064,7 +1062,9 @@ function RegistrationPage() {
         tshirtSize: formData.tshirtSize,
         kitId: selectedKit,
         kitName: kit?.name,
-        price: Number(kit.price),
+        // Auditoria UX P5: persistir o preço COM o desconto do evento aplicado —
+        // é este valor que a tela de pagamento e o checkout do MP vão cobrar.
+        price: discounted(Number(kit.price), race.discount),
         status: 'pending_payment',
         emergencyName: formData.emergencyName,
         emergencyPhone: formData.emergencyPhone,
@@ -1384,6 +1384,9 @@ function PaymentPage() {
   // Integração Mercado Pago (Checkout Pro): estado da confirmação automática de pagamento
   const [mpError, setMpError] = useState<string | null>(null);
   const [mpConfirming, setMpConfirming] = useState(false);
+  // Auditoria UX G2: controle do polling — permite mensagem final e botão manual.
+  const [mpPolling, setMpPolling] = useState(false);
+  const [mpPollTimedOut, setMpPollTimedOut] = useState(false);
   const mpPollRef = useRef<number | null>(null);
 
   useEffect(() => () => { if (mpPollRef.current) window.clearInterval(mpPollRef.current); }, []);
@@ -1432,13 +1435,34 @@ function PaymentPage() {
 
   const startStatusPolling = () => {
     if (mpPollRef.current) window.clearInterval(mpPollRef.current);
+    setMpPolling(true);
+    setMpPollTimedOut(false);
     let attempts = 0;
     mpPollRef.current = window.setInterval(async () => {
       attempts += 1;
-      if (attempts > 60) { if (mpPollRef.current) window.clearInterval(mpPollRef.current); return; } // ~3 min
+      if (attempts > 60) { // ~3 min
+        if (mpPollRef.current) window.clearInterval(mpPollRef.current);
+        // Auditoria UX G2: polling parava em silêncio. Agora avisa o usuário
+        // e oferece verificação manual.
+        setMpPolling(false);
+        setMpPollTimedOut(true);
+        return;
+      }
       const done = await syncRegistrationStatus();
-      if (done && mpPollRef.current) window.clearInterval(mpPollRef.current);
+      if (done) {
+        setMpPolling(false);
+        if (mpPollRef.current) window.clearInterval(mpPollRef.current);
+      }
     }, 3000);
+  };
+
+  // Auditoria UX G2: botão "Verificar agora" — consulta única fora do intervalo.
+  const verifyPaymentNow = async () => {
+    const done = await syncRegistrationStatus();
+    if (!done) {
+      // Retenta por mais um ciclo de polling curto
+      startStatusPolling();
+    }
   };
 
   // Confirmação server-side via Edge Function (usa token seguro, sem expor credenciais)
@@ -1647,8 +1671,14 @@ function PaymentPage() {
 
   const handlePixPayment = openMercadoPagoCheckout;
   const handleCardPayment = () => {
-    if (isDemoMode) {
-      // Sem backend real: mantém o fluxo de demonstração local
+    if (!isDemoMode) {
+      // Auditoria UX G3: produção não usa formulário de cartão local — o Checkout Pro
+      // do MP cuida de PIX/cartão/débito/parcelas (dados de cartão nunca passam pelo site).
+      openMercadoPagoCheckout();
+      return;
+    }
+    {
+      // Modo demo: mantém o fluxo de demonstração local
       if (!cardData.number || !cardData.name || !cardData.expiry || !cardData.cvv) {
         alert('Preencha todos os dados do cartão');
         return;
@@ -1670,13 +1700,11 @@ function PaymentPage() {
         setProcessing(false);
         navigate(`/comprovante/${registration.id}`);
       }, 2000);
-      return;
     }
-    // Produção: o Checkout Pro do MP cuida do PIX/cartão (dados de cartão nunca passam pelo site)
-    openMercadoPagoCheckout();
   };
 
   const simulatePixApproval = () => {
+    if (!isDemoMode) return; // Auditoria UX P4: simulação só existe no modo demo
     if (paymentId) {
       const payments = JSON.parse(localStorage.getItem('rb_payments') || '[]');
       const updated = payments.map((p: any) => p.id === paymentId ? { ...p, status: 'approved', paidAt: new Date().toISOString() } : p);
@@ -1724,36 +1752,54 @@ function PaymentPage() {
                     <p className="text-sm text-sky-800 font-medium">Confirmando seu pagamento junto ao Mercado Pago...</p>
                   </div>
                 )}
+                {/* Auditoria UX G2: feedback durante e APÓS o fim do polling */}
+                {mpPolling && !mpConfirming && (
+                  <div className="mb-4 flex items-center gap-3 p-4 bg-sky-50 border border-sky-200 rounded-xl">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-sky-600"></div>
+                    <p className="text-sm text-sky-800 font-medium">Aguardando a confirmação do pagamento... esta página atualiza sozinha assim que o Mercado Pago aprovar.</p>
+                  </div>
+                )}
+                {mpPollTimedOut && (
+                  <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+                    <p className="text-sm text-amber-800">
+                      O pagamento ainda não foi confirmado após alguns minutos. Se você já concluiu o pagamento no Mercado Pago, ele pode estar em processamento — verifique agora ou confira sua inscrição mais tarde em <strong>Minha Conta</strong>.
+                    </p>
+                    <button onClick={verifyPaymentNow} className="px-4 py-2 bg-amber-600 text-white text-sm font-bold rounded-lg hover:bg-amber-700 transition-colors">
+                      Verificar agora
+                    </button>
+                  </div>
+                )}
                 {mpError && (
                   <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
                     <p className="text-sm text-amber-800">{mpError}</p>
                   </div>
                 )}
-                <h2 className="font-bold mb-4">Forma de Pagamento</h2>
+                <h2 className="font-bold mb-4">Pagamento</h2>
 
                 {!isDemoMode ? (
                   <>
+                {/* Auditoria UX G3: um único botão. PIX/cartão/débito/parcelas são
+                    escolhidos dentro do Checkout Pro do Mercado Pago — aqui só
+                    mostramos as opções como informação, sem seleção que não tem efeito. */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                  <button onClick={() => setSelectedMethod('pix')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'pix' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
-                    <QrCode className={`w-5 h-5 mb-2 ${selectedMethod === 'pix' ? 'text-emerald-600' : 'text-gray-500'}`} />
+                  <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
+                    <QrCode className="w-5 h-5 mb-2 text-emerald-600" />
                     <p className="font-bold text-sm">PIX</p>
-                    <p className="text-xs text-gray-500">Aprovação instantânea via Mercado Pago</p>
-                  </button>
-                  <button onClick={() => setSelectedMethod('credit_card')} className={`p-4 rounded-xl border-2 text-left ${selectedMethod === 'credit_card' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
-                    <CreditCard className={`w-5 h-5 mb-2 ${selectedMethod === 'credit_card' ? 'text-emerald-600' : 'text-gray-500'}`} />
-                    <p className="font-bold text-sm">Cartão de Crédito</p>
-                    <p className="text-xs text-gray-500">Até 12x — checkout seguro Mercado Pago</p>
-                  </button>
+                    <p className="text-xs text-gray-500">Aprovação instantânea</p>
+                  </div>
+                  <div className="p-4 rounded-xl border border-gray-200 bg-gray-50">
+                    <CreditCard className="w-5 h-5 mb-2 text-sky-600" />
+                    <p className="font-bold text-sm">Cartão de crédito ou débito</p>
+                    <p className="text-xs text-gray-500">Em até 12x no checkout seguro</p>
+                  </div>
                 </div>
 
-                {selectedMethod && (
-                  <button onClick={openMercadoPagoCheckout} disabled={processing || mpConfirming} className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 hover:from-emerald-700 hover:to-sky-700 transition-all">
-                    <Shield className="w-4 h-4" />
-                    {processing ? 'Redirecionando para o Mercado Pago...' : `Pagar R$ ${formatBRL(total)} com ${selectedMethod === 'pix' ? 'PIX' : 'Cartão'}`}
-                  </button>
-                )}
+                <button onClick={openMercadoPagoCheckout} disabled={processing || mpConfirming} className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2 hover:from-emerald-700 hover:to-sky-700 transition-all">
+                  <Shield className="w-4 h-4" />
+                  {processing ? 'Redirecionando para o Mercado Pago...' : `Pagar R$ ${formatBRL(total)} no Mercado Pago`}
+                </button>
                 <p className="text-xs text-slate-400 mt-3 text-center">
-                  Você será redirecionado para o ambiente seguro do Mercado Pago. Ao concluir, volta automaticamente e a inscrição é confirmada sem ação manual.
+                  Você será redirecionado para o ambiente seguro do Mercado Pago, onde escolhe PIX ou cartão. Ao concluir, volta automaticamente e a inscrição é confirmada sem ação manual.
                 </p>
                   </>
                 ) : (
@@ -2449,7 +2495,14 @@ function AdminDashboard() {
                           >
                             {race.registrationStatus === 'upcoming' ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
                           </button>
-                          <button onClick={async () => { if (confirm('Excluir permanentemente?')) {
+                          <button onClick={async () => {
+                            // Auditoria UX A1: bloquear exclusão de evento com inscritos.
+                            const inscritos = registrations.filter(r => r.raceId === race.id).length;
+                            if (inscritos > 0) {
+                              alert(`Não é possível excluir: este evento tem ${inscritos} inscrição(ões). Encerre as inscrições ou cancele-as antes.`);
+                              return;
+                            }
+                            if (confirm(`Excluir permanentemente o evento "${race.name}"?`)) {
                             try {
                               await deleteRace(race.id);
                             } catch (error) {
@@ -2604,13 +2657,18 @@ function AdminDashboard() {
                       <td className="px-6 py-4 text-sm font-semibold">R$ {formatBRL(payment.total)}</td>
                       <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${payment.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{payment.status === 'approved' ? 'Aprovado' : 'Pendente'}</span></td>
                       <td className="px-6 py-4 text-right">{payment.status === 'pending' && <button onClick={async () => {
+                        // Auditoria UX A2: confirmar com nome e valor antes de aprovar.
+                        const reg = registrations.find(r => r.id === payment.registrationId);
+                        const nome = reg?.participantFirstName ? `${reg.participantFirstName} ${reg.participantLastName || ''}`.trim() : (reg?.userId?.slice(0, 8) || 'participante desconhecido');
+                        const evento = reg ? (races.find(x => x.id === reg.raceId)?.name || '') : '';
+                        if (!confirm(`Confirmar pagamento de ${nome}${evento ? ` (${evento})` : ''} no valor de R$ ${formatBRL(payment.total)}?\n\nIsto aprova o pagamento e CONFIRMA a inscrição correspondente.`)) return;
                         try {
                           await approvePayment(payment.id);
                         } catch (error) {
                           console.error('Erro ao aprovar pagamento:', error);
                           alert('Erro ao aprovar pagamento. Tente novamente.');
                         }
-                      }} className="p-1.5 text-green-600 hover:bg-green-50 rounded"><CheckCircle className="w-4 h-4" /></button>}</td>
+                      }} className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Aprovar pagamento"><CheckCircle className="w-4 h-4" /></button>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2780,8 +2838,8 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/admin" element={<ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>} />
               <Route path="/minha-conta" element={<ProtectedRoute requiredRole="participant"><ParticipantDashboard /></ProtectedRoute>} />
-              <Route path="/diagnostico" element={<DiagnosticPage />} />
-              <Route path="/teste-supabase" element={<TestSupabase />} />
+              {/* Auditoria UX T4: rotas de diagnóstico removidas do app público. */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </ErrorBoundary>
         </DataProvider>
