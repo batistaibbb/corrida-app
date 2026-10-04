@@ -184,6 +184,9 @@ DROP POLICY IF EXISTS "Usuários podem ver seus próprios pagamentos" ON public.
 DROP POLICY IF EXISTS "Admins podem atualizar pagamentos"           ON public.payments;
 DROP POLICY IF EXISTS "Usuários podem criar pagamentos"             ON public.payments;
 DROP POLICY IF EXISTS "Admins podem apagar pagamentos"              ON public.payments;
+-- Idempotência: se uma execução parcial anterior já criou estas políticas,
+-- remova-as aqui para evitar erro 42710 ("policy already exists").
+DROP POLICY IF EXISTS "Usuários podem atualizar referências dos seus pagamentos" ON public.payments;
 DROP POLICY IF EXISTS "Users can view own payments"                 ON public.payments;
 DROP POLICY IF EXISTS "Admins can view all payments"                ON public.payments;
 
