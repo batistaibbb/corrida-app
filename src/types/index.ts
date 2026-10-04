@@ -112,4 +112,8 @@ export interface Registration {
   participantEmail?: string;
   participantPhone?: string;
   participantCpf?: string;
+  // Menor de idade: consentimento do responsavel legal coletado no checkout
+  isMinor?: boolean;
+  responsibleName?: string;
+  responsibleCpf?: string;
 }

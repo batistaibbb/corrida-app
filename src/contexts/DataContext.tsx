@@ -125,6 +125,9 @@ function convertRegistrationFromSupabase(reg: any): Registration {
     participantEmail: reg.participant_email ?? reg.participantEmail,
     participantPhone: reg.participant_phone ?? reg.participantPhone,
     participantCpf: reg.participant_cpf ?? reg.participantCpf,
+    isMinor: reg.is_minor === true || reg.isMinor === true,
+    responsibleName: reg.responsible_name ?? reg.responsibleName,
+    responsibleCpf: reg.responsible_cpf ?? reg.responsibleCpf,
     createdAt: reg.created_at || reg.createdAt,
   };
 }
@@ -451,6 +454,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (reg.participantEmail) insertData.participant_email = reg.participantEmail;
       if (reg.participantPhone) insertData.participant_phone = reg.participantPhone;
       if (reg.participantCpf) insertData.participant_cpf = reg.participantCpf;
+      // Consentimento do responsavel legal (menor de idade)
+      if (reg.isMinor) {
+        insertData.is_minor = true;
+        if (reg.responsibleName) insertData.responsible_name = reg.responsibleName;
+        if (reg.responsibleCpf) insertData.responsible_cpf = reg.responsibleCpf;
+      }
       
       const { data, error } = await supabase
         .from('registrations')

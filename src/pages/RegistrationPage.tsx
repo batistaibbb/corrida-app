@@ -26,7 +26,8 @@ export default function RegistrationPage() {
   const [formData, setFormData] = useState({ 
     firstName: '', lastName: '', email: '', phone: '', cpf: '', birthDate: '', gender: '', 
     tshirtSize: '', address: '', city: '', state: '', zipCode: '', 
-    emergencyName: '', emergencyPhone: '', acceptTerms: false, acceptMedical: false 
+    emergencyName: '', emergencyPhone: '', acceptTerms: false, acceptMedical: false,
+    responsibleName: '', responsibleCpf: '' 
   });
 
   // Auditoria UX P8: pre-preencher dados pessoais a partir do perfil - hoje o
@@ -78,7 +79,7 @@ export default function RegistrationPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     let next = value;
-    if (name === 'cpf') next = maskCpf(value);
+    if (name === 'cpf' || name === 'responsibleCpf') next = maskCpf(value);
     else if (name === 'phone' || name === 'emergencyPhone') next = maskPhone(value);
     else if (name === 'zipCode') next = maskZip(value);
     else if (name === 'state') next = value.toUpperCase().slice(0, 2);
@@ -103,6 +104,30 @@ export default function RegistrationPage() {
     return d2 === parseInt(cpf[10]);
   };
 
+  // Menor de idade: exige responsavel legal (nome + CPF valido do responsavel).
+  const parseResponsibleCpf = (raw: string) => {
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return null; // campo opcional quando maior de idade
+    if (!isValidCpf(digits)) return undefined; // invalido -> bloqueia envio
+    return digits;
+  };
+
+  const ageFromBirthDate = (birthDate: string) => {
+    const b = new Date(birthDate);
+    if (isNaN(b.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - b.getFullYear();
+    const m = now.getMonth() - b.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < b.getDate())) age--;
+    return age;
+  };
+
+  const isMinor = (() => {
+    if (!formData.birthDate) return false;
+    const age = ageFromBirthDate(formData.birthDate);
+    return age !== null && age < 18;
+  })();
+
   const handleSubmit = async () => {
     const kit = getSelectedKit();
     // Validação explícita: sem preço numérico válido a tela de pagamento quebraria
@@ -115,6 +140,13 @@ export default function RegistrationPage() {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) { showToast('E-mail inválido.', 'error'); return; }
     if (formData.phone.replace(/\D/g, '').length < 10) { showToast('Telefone incompleto — inclua DDD.', 'error'); return; }
     if (formData.birthDate && new Date(formData.birthDate) > new Date()) { showToast('Data de nascimento não pode ser no futuro.', 'error'); return; }
+    // Menor de idade: exigir responsavel legal com CPF valido.
+    if (isMinor) {
+      if (!formData.responsibleName?.trim()) { showToast('Para menores de 18 anos é obrigatório o nome do responsável legal.', 'error'); return; }
+      const respCpf = parseResponsibleCpf(formData.responsibleCpf || '');
+      if (respCpf === undefined) { showToast('CPF do responsável inválido. Verifique os números informados.', 'error'); return; }
+      if (respCpf === null) { showToast('Para menores de 18 anos é obrigatório o CPF do responsável legal.', 'error'); return; }
+    }
     try {
       const regId = await addRegistration({
         userId: user.id,
@@ -135,6 +167,12 @@ export default function RegistrationPage() {
         participantEmail: formData.email,
         participantPhone: formData.phone,
         participantCpf: formData.cpf,
+        // Menor de idade: responsavel legal coletado no checkout
+        ...(isMinor ? {
+          isMinor: true,
+          responsibleName: formData.responsibleName.trim(),
+          responsibleCpf: (formData.responsibleCpf || '').replace(/\D/g, ''),
+        } : {}),
       });
       if (!regId) throw new Error('Inscrição não retornou ID');
       navigate(`/pagamento/${regId}`);
@@ -220,9 +258,21 @@ export default function RegistrationPage() {
                 <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="E-mail" className="w-full px-4 py-2.5 border rounded-lg" required />
                 <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="Telefone" className="w-full px-4 py-2.5 border rounded-lg" required />
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="text" name="cpf" value={formData.cpf} onChange={handleChange} placeholder="CPF" className="px-4 py-2.5 border rounded-lg" required />
+                  <input type="text" name="cpf" value={formData.cpf} onChange={handleChange} placeholder="CPF *" className="px-4 py-2.5 border rounded-lg" required />
                   <input type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} className="px-4 py-2.5 border rounded-lg" required />
                 </div>
+                {/* Auditoria UX P1/menores: data de nascimento obrigatoria para identificar menor de 18 */}
+                {!formData.birthDate && (
+                  <p className="text-xs text-slate-500 -mt-2">Informe a data de nascimento — obrigatória para validar regras de participação de menores de 18 anos.</p>
+                )}
+                {isMinor && (
+                  <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
+                    <p className="text-sm font-bold text-amber-800">⚠️ Participante menor de 18 anos</p>
+                    <p className="text-xs text-amber-700">É necessário o consentimento do responsável legal, com nome e CPF válidos.</p>
+                    <input type="text" name="responsibleName" value={formData.responsibleName} onChange={handleChange} placeholder="Nome completo do responsável legal *" className="w-full px-4 py-2.5 border rounded-lg bg-white" />
+                    <input type="text" name="responsibleCpf" value={formData.responsibleCpf} onChange={handleChange} placeholder="CPF do responsável * " className="w-full px-4 py-2.5 border rounded-lg bg-white" inputMode="numeric" />
+                  </div>
+                )}
                 <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg" required>
                   <option value="">Gênero</option>
                   <option value="masculino">Masculino</option>
@@ -230,7 +280,7 @@ export default function RegistrationPage() {
                 </select>
                 <div className="flex gap-3">
                   <button onClick={() => setStep(1)} className="px-6 py-3 border rounded-xl">Voltar</button>
-                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email) || formData.cpf.replace(/\D/g, '').length !== 11} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
+                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email) || formData.cpf.replace(/\D/g, '').length !== 11 || !formData.birthDate || (isMinor && (!formData.responsibleName.trim() || !formData.responsibleCpf.replace(/\D/g, '')))} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
                 </div>
               </div>
             )}
