@@ -1388,6 +1388,13 @@ function PaymentPage() {
 
   useEffect(() => () => { if (mpPollRef.current) window.clearInterval(mpPollRef.current); }, []);
 
+  // Inscrição já paga/confirmada: não exibe a tela de pagamento (evita cobrança duplicada)
+  useEffect(() => {
+    if (registration?.status === 'confirmed') {
+      navigate(`/comprovante/${registration.id}`, { replace: true });
+    }
+  }, [registration?.status, registration?.id]);
+
   // ============================================
   // CONFIRMAÇÃO AUTOMÁTICA DE PAGAMENTO (Mercado Pago)
   // ============================================
