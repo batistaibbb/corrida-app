@@ -23,8 +23,26 @@ export const supabase: SupabaseClient | null =
       })
     : null;
 
-// Check if running in demo mode (no Supabase configured)
-export const isDemoMode = !supabase;
+// Auditoria UX P4: o modo demo (login por localStorage com senhas em texto
+// plano, dados fictícios, simulação de aprovação de pagamento) só pode ser
+// ativado EXPLICITAMENTE via VITE_DEMO_MODE=true. Antes, bastava esquecer os
+// env vars VITE_SUPABASE_* no build para a produção inteira cair em modo demo
+// silenciosamente — um risco grave. Agora é preciso opt-in deliberado.
+const demoFlagEnabled = import.meta.env.VITE_DEMO_MODE === 'true';
+
+// Demo mode ativo apenas quando habilitado explicitamente E não há Supabase
+// configurado (o flag nunca sobrepõe uma configuração real de produção).
+export const isDemoMode = !supabase && demoFlagEnabled;
+
+// Configuração inválida: Supabase ausente sem opt-in de demo → app deve se
+// comportar como "não configurado" (nunca como demo), e avisamos no console.
+if (!supabase && !demoFlagEnabled) {
+  console.error(
+    '❌ Supabase não configurado (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY ausentes).\n' +
+    'O app NÃO entrará em modo demo automaticamente. Para demonstrações locais,\n' +
+    'defina VITE_DEMO_MODE=true no .env.local.'
+  );
+}
 
 // URL/anon key efetivos do Supabase — usados pelas Edge Functions de pagamento.
 // Fallback hardcoded: se o build no Vercel rodar sem os env vars VITE_*, o

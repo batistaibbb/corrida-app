@@ -27,6 +27,9 @@ export default function EventForm({ race, onSave, onClose, organizerId, organize
     location: race?.location || '',
     city: race?.city || '',
     state: race?.state || '',
+    // Auditoria UX P6: infos de retirada do kit (exibidas no comprovante/QR do participante)
+    kitPickup: race?.kitPickup || '',
+    kitPickupLocation: race?.kitPickupLocation || '',
     image: race?.image || '',
     description: race?.description || '',
     organizer: organizerName,

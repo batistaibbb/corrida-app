@@ -4,19 +4,13 @@
 // sobrescrito por "pending"; (4) valida valor pago.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const getEnv = (...names: string[]): string => {
-  for (const n of names) { const v = Deno.env.get(n); if (v) return v; }
-  return "";
-};
-const PROJECT_URL = () => getEnv("PROJECT_URL", "SUPABASE_URL");
-const SERVICE_ROLE_KEY = () => getEnv("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY");
+import { MP_ACCESS_TOKEN, PROJECT_URL, SERVICE_ROLE_KEY } from "../_shared/env.ts";
 
 const json = (obj: unknown, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { "Content-Type": "application/json" } });
 
 async function mpGet(path: string) {
-  const token = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+  const token = MP_ACCESS_TOKEN();
   return await fetch(`https://api.mercadopago.com${path}`, {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
   });

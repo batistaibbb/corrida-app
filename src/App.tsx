@@ -7,9 +7,12 @@ import { supabase, isDemoMode, supabaseUrlSafe, supabaseAnonKeySafe } from './li
 import EventForm from './components/EventForm';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatusColor, canRegister } from './utils/raceStatus';
+import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatusColor, canRegister, formatEventDate, getEnrollmentStatusLabel } from './utils/raceStatus';
+import { showToast, ToastHost } from './utils/toast';
+import { confirmAction, ConfirmHost } from './utils/confirm';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 import * as XLSX from 'xlsx';
 import { 
   Trophy, Calendar, MapPin, Users, Star, Search, Filter, 
@@ -41,6 +44,11 @@ function Header() {
             <span className="text-xl font-semibold text-slate-900 tracking-tight">
               Smart Brasil Ticket
             </span>
+            {isDemoMode && (
+              <span className="ml-1 px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-bold rounded uppercase tracking-wide" title="Dados fictícios em localStorage — não é produção">
+                Demo
+              </span>
+            )}
           </Link>
 
           <div className="flex items-center gap-3">
@@ -75,6 +83,15 @@ function Header() {
       </div>
     </header>
   );
+}
+
+// Auditoria UX P2: destino seguro pós-login (evita open redirect e /admin acidental).
+function safeRedirectTarget(raw: string | null): string {
+  if (!raw) return '/minha-conta';
+  try { raw = decodeURIComponent(raw); } catch { /* usa como está */ }
+  // Apenas caminhos internos (começam com "/" mas não "//" nem "https://...")
+  if (/^\/(?!\/)/.test(raw)) return raw;
+  return '/minha-conta';
 }
 
 function ProtectedRoute({ children, requiredRole }: { children: ReactNode; requiredRole?: 'admin' | 'participant' }) {
@@ -586,6 +603,13 @@ function LoginPage() {
   const [error, setError] = useState('');
   const { login, register } = useAuth();
   const navigate = useNavigate();
+  // Auditoria UX P2: destino original em ?from= - apos autenticar, o usuario
+  // volta ao ponto onde estava (ex.: inscricao iniciada) em vez de /minha-conta.
+  const location = useLocation();
+  const fromParam = new URLSearchParams(location.search).get('from');
+  // P2: valida com whitelist de prefixos legítimos (open-redirect guard reforçado).
+  const SAFE_REDIRECT_PREFIXES = ['/inscricao/', '/evento/', '/pagamento/', '/comprovante/', '/minha-conta'];
+  const isSafeRedirect = !!fromParam && SAFE_REDIRECT_PREFIXES.some(p => fromParam.startsWith(p));
   const [formData, setFormData] = useState({ name: '', email: '', password: '', cpf: '', phone: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -596,6 +620,11 @@ function LoginPage() {
         // Wait a bit for user context to update, then redirect based on role
         setTimeout(() => {
           const currentUser = JSON.parse(localStorage.getItem('rb_session') || 'null');
+          // P2: fluxo iniciado antes do login tem prioridade sobre o destino padrao.
+          if (isSafeRedirect && (!currentUser || currentUser.role !== 'admin')) {
+            navigate(fromParam!, { replace: true });
+            return;
+          }
           if (currentUser && currentUser.role === 'admin') {
             navigate('/admin');
           } else {
@@ -607,7 +636,7 @@ function LoginPage() {
       }
     } else {
       const result = await register({ ...formData, role: 'participant' });
-      if (result.success) navigate('/minha-conta');
+      if (result.success) navigate(isSafeRedirect ? fromParam! : '/minha-conta', { replace: isSafeRedirect });
       else setError(result.message);
     }
   };
@@ -642,9 +671,9 @@ function LoginPage() {
           <button type="submit" className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl hover:from-emerald-700 hover:to-sky-700 transition-all">{isLogin ? 'Entrar' : 'Criar Conta'}</button>
         </form>
 
-        {isLogin && (
+        {isDemoMode && isLogin && (
           <div className="mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
-            <p className="text-xs font-semibold text-sky-700 mb-2">Credenciais de teste:</p>
+            <p className="text-xs font-semibold text-sky-700 mb-2">Credenciais de teste (modo demo):</p>
             <p className="text-xs text-sky-600"><strong>Admin:</strong> admin@smartbrasilticket.com.br / admin123</p>
             <p className="text-xs text-sky-600"><strong>Participante:</strong> joao@email.com / 123456</p>
           </div>
@@ -671,7 +700,12 @@ function RaceDetailsPage() {
   if (!race) return <div className="text-center py-20">Evento não encontrado</div>;
 
   const handleRegister = () => {
-    if (!user) { navigate('/login'); return; }
+    if (!user) {
+      // Auditoria UX P2: levar o destino - apos login/registro volta direto para a inscricao.
+      const target = `/inscricao/${race.id}${selectedDistance ? `?distance=${selectedDistance}` : ''}`;
+      navigate(`/login?from=${encodeURIComponent(target)}`);
+      return;
+    }
     if (!selectedDistance) return;
     navigate(`/inscricao/${race.id}?distance=${selectedDistance}`);
   };
@@ -685,7 +719,7 @@ function RaceDetailsPage() {
       });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert('Link copiado!');
+      showToast('Link copiado!', 'success');
     }
   };
 
@@ -1024,8 +1058,9 @@ function RaceDetailsPage() {
 
 function RegistrationPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams(); // G5: ?continuar=1 retoma inscrição pendente
   const { user } = useAuth();
-  const { getRaceById, addRegistration } = useData();
+  const { getRaceById, addRegistration, registrations } = useData();
   const navigate = useNavigate();
   const race = id ? getRaceById(id) : null;
   const [step, setStep] = useState(1);
@@ -1036,24 +1071,92 @@ function RegistrationPage() {
     emergencyName: '', emergencyPhone: '', acceptTerms: false, acceptMedical: false 
   });
 
-  if (!race || !user) return <div className="text-center py-20">Dados inválidos</div>;
+  // Auditoria UX P8: pre-preencher dados pessoais a partir do perfil - hoje o
+  // usuario logado digita tudo de novo mesmo tendo nome/email/CPF/telefone salvos.
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        firstName: prev.firstName || (user.name || '').split(' ')[0] || '',
+        lastName: prev.lastName || (user.name || '').split(' ').slice(1).join(' ') || '',
+        email: prev.email || user.email || '',
+        phone: prev.phone || user.phone || '',
+        cpf: prev.cpf || user.cpf || '',
+      }));
+    }
+  }, [user]);
+
+  // Auditoria UX P2: deslogado aqui (link direto/refresh) -> login com retorno garantido.
+  if (!race || !user) {
+    if (!user) return <Navigate to={`/login?from=${encodeURIComponent(`/inscricao/${id || ''}`)}`} replace />;
+    return <div className="text-center py-20">Dados inválidos</div>;
+  }
+
+  // Auditoria UX G5: se já existe inscrição pendente de pagamento neste evento,
+  // retoma direto o pagamento em vez de criar uma inscrição duplicada.
+  useEffect(() => {
+    if (!user || !race || !registrations.length) return;
+    const pend = registrations.find(
+      r => r.userId === user.id && r.raceId === race.id && r.status === 'pending_payment'
+    );
+    if (pend) navigate(`/pagamento/${pend.id}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, race?.id, registrations]);
+
+  // Auditoria UX P7: mascaras progressivas enquanto digita.
+  const maskCpf = (v: string) => v.replace(/\D/g, '').slice(0, 11)
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  const maskPhone = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 11);
+    if (d.length <= 2) return d.length ? `(${d}` : '';
+    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  };
+  const maskZip = (v: string) => v.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1-$2');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value }));
+    let next = value;
+    if (name === 'cpf') next = maskCpf(value);
+    else if (name === 'phone' || name === 'emergencyPhone') next = maskPhone(value);
+    else if (name === 'zipCode') next = maskZip(value);
+    else if (name === 'state') next = value.toUpperCase().slice(0, 2);
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : next }));
   };
 
   const getSelectedKit = () => {
     return race.kits?.find(k => k.id === selectedKit);
   };
 
+  // Auditoria UX P3: validacao real de CPF (digitos verificadores).
+  const isValidCpf = (raw: string) => {
+    const cpf = raw.replace(/\D/g, '');
+    if (cpf.length !== 11 || /^([0-9])\1{10}$/.test(cpf)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += parseInt(cpf[i]) * (11 - i);
+    let d1 = (sum * 10) % 11; if (d1 === 10) d1 = 0;
+    if (d1 !== parseInt(cpf[9])) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(cpf[i]) * (10 - i);
+    let d2 = (sum * 10) % 11; if (d2 === 10) d2 = 0;
+    return d2 === parseInt(cpf[10]);
+  };
+
   const handleSubmit = async () => {
     const kit = getSelectedKit();
     // Validação explícita: sem preço numérico válido a tela de pagamento quebraria
     if (!kit || !Number.isFinite(Number(kit.price)) || Number(kit.price) <= 0) {
-      alert('O preço do kit selecionado é inválido. Edite o evento no painel admin e defina um preço (número maior que zero).');
+      showToast('O preço do kit selecionado é inválido. Edite o evento no painel admin e defina um preço (número maior que zero).', 'error', 6000);
       return;
     }
+    // P3: bloquear envio com dados invalidos ANTES de criar a inscricao pendente
+    if (!isValidCpf(formData.cpf)) { showToast('CPF inválido. Verifique os números informados.', 'error'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) { showToast('E-mail inválido.', 'error'); return; }
+    if (formData.phone.replace(/\D/g, '').length < 10) { showToast('Telefone incompleto — inclua DDD.', 'error'); return; }
+    if (formData.birthDate && new Date(formData.birthDate) > new Date()) { showToast('Data de nascimento não pode ser no futuro.', 'error'); return; }
     try {
       const regId = await addRegistration({
         userId: user.id,
@@ -1079,7 +1182,7 @@ function RegistrationPage() {
       navigate(`/pagamento/${regId}`);
     } catch (error) {
       console.error('Erro ao criar inscrição:', error);
-      alert(`Erro ao criar inscrição: ${error instanceof Error ? error.message : 'tente novamente'}.`);
+      showToast(`Erro ao criar inscrição: ${error instanceof Error ? error.message : 'tente novamente'}.`, 'error', 6000);
     }
   };
 
@@ -1119,7 +1222,12 @@ function RegistrationPage() {
                           ))}
                         </ul>
                         <div className="flex justify-between items-center">
-                          <span className="text-2xl font-bold text-emerald-600">R$ {formatBRL(kit.price)}</span>
+                          <span className="text-2xl font-bold text-emerald-600">
+                            {(race.discount ?? 0) > 0 && (
+                              <span className="text-sm font-normal text-slate-400 line-through mr-2">R$ {formatBRL(toSafeNumber(kit.price))}</span>
+                            )}
+                            R$ {formatBRL(discounted(toSafeNumber(kit.price), race.discount))}
+                          </span>
                           {kit.distance && kit.distance > 0 && (
                             <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded">
                               {kit.distance}km
@@ -1164,7 +1272,7 @@ function RegistrationPage() {
                 </select>
                 <div className="flex gap-3">
                   <button onClick={() => setStep(1)} className="px-6 py-3 border rounded-xl">Voltar</button>
-                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !formData.email || !formData.cpf} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
+                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email) || formData.cpf.replace(/\D/g, '').length !== 11} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
                 </div>
               </div>
             )}
@@ -1248,7 +1356,14 @@ function RegistrationPage() {
                   {formData.tshirtSize && (
                     <div className="flex justify-between"><span className="text-gray-500">Camisa</span><span className="font-medium">Tam. {formData.tshirtSize}</span></div>
                   )}
-                  <div className="flex justify-between pt-3 border-t"><span className="font-bold">Total</span><span className="font-bold text-emerald-600">R$ {formatBRL(getSelectedKit()?.price)}</span></div>
+                  {(race.discount ?? 0) > 0 && (
+                    <div className="flex justify-between text-xs text-emerald-600">
+                      <span>Desconto do evento ({race.discount}%)</span>
+                      <span>- R$ {formatBRL(toSafeNumber(getSelectedKit()?.price) - discounted(toSafeNumber(getSelectedKit()?.price), race.discount))}</span>
+                    </div>
+                  )}
+                  {/* P5: total exibido = preco cobrado (com desconto), igual ao persistido na inscricao */}
+                  <div className="flex justify-between pt-3 border-t"><span className="font-bold">Total</span><span className="font-bold text-emerald-600">R$ {formatBRL(discounted(toSafeNumber(getSelectedKit()?.price), race.discount))}</span></div>
                 </>
               )}
             </div>
@@ -1680,7 +1795,7 @@ function PaymentPage() {
     {
       // Modo demo: mantém o fluxo de demonstração local
       if (!cardData.number || !cardData.name || !cardData.expiry || !cardData.cvv) {
-        alert('Preencha todos os dados do cartão');
+        showToast('Preencha todos os dados do cartão', 'error');
         return;
       }
       setProcessing(true);
@@ -1942,6 +2057,18 @@ function ReceiptPage() {
   const race = registration ? getRaceById(registration.raceId) : null;
   const payment = registration ? getPaymentByRegistration(registration.id) : null;
 
+  // Auditoria UX G7: QR Code do código de confirmação para leitura na retirada do kit.
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const code = registration?.confirmationCode;
+    if (!code || isDemoMode) { setQrDataUrl(null); return; }
+    QRCode.toDataURL(String(code), { width: 320, margin: 1 })
+      .then(url => { if (!cancelled) setQrDataUrl(url); })
+      .catch(() => { /* QR é opcional — o código em texto continua visível */ });
+    return () => { cancelled = true; };
+  }, [registration?.confirmationCode]);
+
   if (!registration && !fetchAttempted) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1979,7 +2106,7 @@ function ReceiptPage() {
     );
   }
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     // Gera o comprovante em PDF (jsPDF já incluído no projeto)
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const pageW = doc.internal.pageSize.getWidth();
@@ -2017,6 +2144,13 @@ function ReceiptPage() {
     doc.text(registration.confirmationCode || '-', pageW / 2, y, { align: 'center' });
     y += 10;
 
+    // G7: QR Code do código de confirmação (leitura na retirada do kit)
+    try {
+      const qr = await QRCode.toDataURL(String(registration.confirmationCode || ''), { width: 320, margin: 1 });
+      doc.addImage(qr, 'PNG', (pageW - 40) / 2, y, 40, 40);
+      y += 44;
+    } catch { /* sem QR — o código em texto acima já basta */ }
+
     doc.setDrawColor(203, 213, 225);
     doc.line(marginX, y, pageW - marginX, y);
     y += 10;
@@ -2046,8 +2180,17 @@ function ReceiptPage() {
     y += 4;
 
     sectionTitle('Participante');
-    row('Nome', user.name);
-    row('CPF', user.cpf);
+    // G7: dados do PARTICIPANTE da inscrição (não da conta de login — pode ser pai/mãe inscrevendo filho)
+    const partName = [registration.participantFirstName, registration.participantLastName].filter(Boolean).join(' ') || user.name;
+    row('Nome', partName);
+    row('CPF', registration.participantCpf || user.cpf);
+    if (registration.participantEmail) row('E-mail', registration.participantEmail);
+    if (registration.participantPhone) row('Telefone', registration.participantPhone);
+    y += 4;
+
+    sectionTitle('Retirada do Kit');
+    row('Data/Hora', race.kitPickup ? String(race.kitPickup) : 'Consulte o e-mail de confirmação do organizador');
+    row('Local', race.kitPickupLocation || race.location || 'A definir pelo organizador');
     y += 4;
 
     sectionTitle('Inscrição');
@@ -2119,9 +2262,39 @@ function ReceiptPage() {
 
             <div>
               <h3 className="font-bold mb-3 flex items-center gap-2 text-slate-900"><User className="w-5 h-5 text-sky-600" /> Participante</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><p className="text-slate-500">Nome</p><p className="font-medium text-slate-900">{user.name}</p></div>
-                <div><p className="text-slate-500">CPF</p><p className="font-medium text-slate-900">{user.cpf}</p></div>
+              {/* G7: dados do participante da inscrição (quem corre), com fallback p/ conta de login */}
+              {(() => {
+                const partName = [registration.participantFirstName, registration.participantLastName].filter(Boolean).join(' ') || user.name;
+                return (
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div><p className="text-slate-500">Nome</p><p className="font-medium text-slate-900">{partName}</p></div>
+                    <div><p className="text-slate-500">CPF</p><p className="font-medium text-slate-900">{registration.participantCpf || user.cpf}</p></div>
+                    {(registration.participantEmail || registration.participantPhone) && (
+                      <>
+                        <div><p className="text-slate-500">E-mail</p><p className="font-medium text-slate-900 break-all">{registration.participantEmail || user.email}</p></div>
+                        <div><p className="text-slate-500">Telefone</p><p className="font-medium text-slate-900">{registration.participantPhone || user.phone}</p></div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div>
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-slate-900"><QrCode className="w-5 h-5 text-emerald-600" /> Retirada do Kit</h3>
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} alt={`QR Code do código ${registration.confirmationCode}`} className="w-40 h-40 mx-auto rounded-lg bg-white p-2 border border-slate-200" />
+                ) : (
+                  <p className="text-xs text-slate-400 text-center">Apresente o código acima na retirada.</p>
+                )}
+                <p className="text-xs text-slate-500 text-center">Mostre este QR Code (ou digite o código) na retirada do kit.</p>
+                <div className="text-sm">
+                  <p className="text-slate-500">Quando</p>
+                  <p className="font-medium text-slate-900">{race.kitPickup || 'Será informado pelo organizador — acompanhe seu e-mail.'}</p>
+                  <p className="text-slate-500 mt-2">Onde</p>
+                  <p className="font-medium text-slate-900">{race.kitPickupLocation || race.location || 'A definir pelo organizador'}</p>
+                </div>
               </div>
             </div>
 
@@ -2279,7 +2452,7 @@ function RegistrationDetailsModal({ registration, race, onClose }: { registratio
               <h3 className="font-semibold text-slate-900 mb-3">Evento</h3>
               <div className="bg-slate-50 rounded-lg p-4">
                 <p className="font-semibold text-slate-900">{race?.name || 'N/A'}</p>
-                <p className="text-sm text-slate-600 mt-1">{race?.date && format(parseISO(race.date), "dd/MM/yyyy")} às {race?.time}</p>
+                <p className="text-sm text-slate-600 mt-1">{formatEventDate(race?.date, race?.time)}</p>
                 <p className="text-sm text-slate-600">{race?.location}, {race?.city}/{race?.state}</p>
               </div>
             </div>
@@ -2472,7 +2645,7 @@ function AdminDashboard() {
                                 await updateRace(race.id, { published: !race.published });
                               } catch (error) {
                                 console.error('Erro ao atualizar publicação:', error);
-                                alert('Erro ao atualizar status. Tente novamente.');
+                                showToast('Erro ao atualizar status. Tente novamente.', 'error');
                               }
                             }} 
                             className={`p-1.5 rounded ${race.published ? 'text-orange-600 hover:bg-orange-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
@@ -2487,7 +2660,7 @@ function AdminDashboard() {
                                 await updateRace(race.id, { registrationStatus: newStatus });
                               } catch (error) {
                                 console.error('Erro ao atualizar inscrições:', error);
-                                alert('Erro ao atualizar status. Tente novamente.');
+                                showToast('Erro ao atualizar status. Tente novamente.', 'error');
                               }
                             }} 
                             className={`p-1.5 rounded ${race.registrationStatus === 'upcoming' ? 'text-slate-600 hover:bg-slate-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
@@ -2499,15 +2672,22 @@ function AdminDashboard() {
                             // Auditoria UX A1: bloquear exclusão de evento com inscritos.
                             const inscritos = registrations.filter(r => r.raceId === race.id).length;
                             if (inscritos > 0) {
-                              alert(`Não é possível excluir: este evento tem ${inscritos} inscrição(ões). Encerre as inscrições ou cancele-as antes.`);
+                              showToast(`Não é possível excluir: este evento tem ${inscritos} inscrição(ões). Encerre as inscrições ou cancele-as antes.`, 'error', 6000);
                               return;
                             }
-                            if (confirm(`Excluir permanentemente o evento "${race.name}"?`)) {
+                            // Auditoria UX A5: modal acessível no lugar de window.confirm nativo.
+                            const ok = await confirmAction({
+                              title: 'Excluir evento',
+                              message: `Excluir permanentemente o evento "${race.name}"?\n\nEsta ação não pode ser desfeita.`,
+                              confirmLabel: 'Excluir',
+                              danger: true,
+                            });
+                            if (ok) {
                             try {
                               await deleteRace(race.id);
                             } catch (error) {
                               console.error('Erro ao excluir:', error);
-                              alert('Erro ao excluir evento. Tente novamente.');
+                              showToast('Erro ao excluir evento. Tente novamente.', 'error');
                             }
                           }}} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Excluir">
                             <Trash2 className="w-4 h-4" />
@@ -2616,7 +2796,7 @@ function AdminDashboard() {
                         <td className="px-4 py-4 text-sm">{race?.name || 'N/A'}</td>
                         <td className="px-4 py-4 text-sm">{reg.kitName || '-'}</td>
                         <td className="px-4 py-4 text-sm">{reg.tshirtSize || 'N/A'}</td>
-                        <td className="px-4 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{reg.status === 'confirmed' ? 'Confirmado' : 'Pendente'}</span></td>
+                        <td className="px-4 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : reg.status === 'pending_payment' ? 'bg-orange-100 text-orange-700' : reg.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{reg.status === 'confirmed' ? 'Confirmado' : reg.status === 'pending_payment' ? 'Aguardando pgto' : reg.status === 'cancelled' ? 'Cancelado' : 'Em processamento'}</span></td>
                         <td className="px-4 py-4 text-right">
                           <button
                             onClick={() => setSelectedRegistration(reg)}
@@ -2658,15 +2838,21 @@ function AdminDashboard() {
                       <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${payment.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{payment.status === 'approved' ? 'Aprovado' : 'Pendente'}</span></td>
                       <td className="px-6 py-4 text-right">{payment.status === 'pending' && <button onClick={async () => {
                         // Auditoria UX A2: confirmar com nome e valor antes de aprovar.
+                        // Auditoria UX A5: modal acessível no lugar de window.confirm nativo.
                         const reg = registrations.find(r => r.id === payment.registrationId);
                         const nome = reg?.participantFirstName ? `${reg.participantFirstName} ${reg.participantLastName || ''}`.trim() : (reg?.userId?.slice(0, 8) || 'participante desconhecido');
                         const evento = reg ? (races.find(x => x.id === reg.raceId)?.name || '') : '';
-                        if (!confirm(`Confirmar pagamento de ${nome}${evento ? ` (${evento})` : ''} no valor de R$ ${formatBRL(payment.total)}?\n\nIsto aprova o pagamento e CONFIRMA a inscrição correspondente.`)) return;
+                        const ok = await confirmAction({
+                          title: 'Aprovar pagamento',
+                          message: `Confirmar pagamento de ${nome}${evento ? ` (${evento})` : ''} no valor de R$ ${formatBRL(payment.total)}?\n\nIsto aprova o pagamento e CONFIRMA a inscrição correspondente. Use também para pagamentos recebidos em dinheiro/espécie.`,
+                          confirmLabel: 'Aprovar pagamento',
+                        });
+                        if (!ok) return;
                         try {
                           await approvePayment(payment.id);
                         } catch (error) {
                           console.error('Erro ao aprovar pagamento:', error);
-                          alert('Erro ao aprovar pagamento. Tente novamente.');
+                          showToast('Erro ao aprovar pagamento. Tente novamente.', 'error');
                         }
                       }} className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Aprovar pagamento"><CheckCircle className="w-4 h-4" /></button>}</td>
                     </tr>
@@ -2694,7 +2880,7 @@ function AdminDashboard() {
               setEditingRace(null);
             } catch (error) {
               console.error('Erro ao salvar evento:', error);
-              alert('Erro ao salvar evento. Tente novamente.');
+              showToast('Erro ao salvar evento. Tente novamente.', 'error');
             }
           }}
           onClose={() => { setShowForm(false); setEditingRace(null); }}
@@ -2782,16 +2968,27 @@ function ParticipantDashboard() {
                       <div className="flex-1">
                         <h3 className="font-bold">{race.name}</h3>
                         <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-500">
-                          <span>{format(parseISO(race.date), "dd/MM/yyyy")}</span>
+                          {/* Auditoria UX G1: data segura — evita crash de parseISO('') em telas criticas */}
+                          <span>{formatEventDate(race.date, race.time)}</span>
                           <span>📍 {race.city}</span>
                           <span>🏃 {reg.distance}km</span>
                         </div>
                         <p className="text-xs font-mono text-gray-400 mt-1">Código: {reg.confirmationCode}</p>
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                          {reg.status === 'confirmed' ? '✅ Confirmado' : '⏳ Pendente'}
+                        {/* Auditoria UX G1/G6: cada estado tem rotulo, cor e explicacao proprios.
+                            "Em processamento" virou texto explicito do que esta acontecendo. */}
+                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                          reg.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                          reg.status === 'pending_payment' ? 'bg-orange-100 text-orange-700' :
+                          reg.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {getEnrollmentStatusLabel(reg).text}
                         </span>
+                        {getEnrollmentStatusLabel(reg).hint && (
+                          <p className="text-[11px] text-gray-400 max-w-[200px] text-right">{getEnrollmentStatusLabel(reg).hint}</p>
+                        )}
                         {reg.status === 'pending_payment' && (
                           <Link to={`/pagamento/${reg.id}`} className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white text-xs font-medium rounded-lg">Pagar Agora</Link>
                         )}
@@ -2826,6 +3023,8 @@ function ParticipantDashboard() {
 function App() {
   return (
     <Router>
+      <ToastHost />
+      <ConfirmHost />
       <AuthProvider>
         <DataProvider>
           <ErrorBoundary>
