@@ -11,6 +11,7 @@ import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatus
 import { showToast, ToastHost } from './utils/toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import QRCode from 'qrcode';
 import * as XLSX from 'xlsx';
 import { 
   Trophy, Calendar, MapPin, Users, Star, Search, Filter, 
@@ -81,6 +82,15 @@ function Header() {
       </div>
     </header>
   );
+}
+
+// Auditoria UX P2: destino seguro pós-login (evita open redirect e /admin acidental).
+function safeRedirectTarget(raw: string | null): string {
+  if (!raw) return '/minha-conta';
+  try { raw = decodeURIComponent(raw); } catch { /* usa como está */ }
+  // Apenas caminhos internos (começam com "/" mas não "//" nem "https://...")
+  if (/^\/(?!\/)/.test(raw)) return raw;
+  return '/minha-conta';
 }
 
 function ProtectedRoute({ children, requiredRole }: { children: ReactNode; requiredRole?: 'admin' | 'participant' }) {
@@ -596,7 +606,9 @@ function LoginPage() {
   // volta ao ponto onde estava (ex.: inscricao iniciada) em vez de /minha-conta.
   const location = useLocation();
   const fromParam = new URLSearchParams(location.search).get('from');
-  const isSafeRedirect = !!fromParam && fromParam.startsWith('/') && !fromParam.startsWith('//');
+  // P2: valida com whitelist de prefixos legítimos (open-redirect guard reforçado).
+  const SAFE_REDIRECT_PREFIXES = ['/inscricao/', '/evento/', '/pagamento/', '/comprovante/', '/minha-conta'];
+  const isSafeRedirect = !!fromParam && SAFE_REDIRECT_PREFIXES.some(p => fromParam.startsWith(p));
   const [formData, setFormData] = useState({ name: '', email: '', password: '', cpf: '', phone: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1045,8 +1057,9 @@ function RaceDetailsPage() {
 
 function RegistrationPage() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams(); // G5: ?continuar=1 retoma inscrição pendente
   const { user } = useAuth();
-  const { getRaceById, addRegistration } = useData();
+  const { getRaceById, addRegistration, registrations } = useData();
   const navigate = useNavigate();
   const race = id ? getRaceById(id) : null;
   const [step, setStep] = useState(1);
@@ -1077,6 +1090,17 @@ function RegistrationPage() {
     if (!user) return <Navigate to={`/login?from=${encodeURIComponent(`/inscricao/${id || ''}`)}`} replace />;
     return <div className="text-center py-20">Dados inválidos</div>;
   }
+
+  // Auditoria UX G5: se já existe inscrição pendente de pagamento neste evento,
+  // retoma direto o pagamento em vez de criar uma inscrição duplicada.
+  useEffect(() => {
+    if (!user || !race || !registrations.length) return;
+    const pend = registrations.find(
+      r => r.userId === user.id && r.raceId === race.id && r.status === 'pending_payment'
+    );
+    if (pend) navigate(`/pagamento/${pend.id}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, race?.id, registrations]);
 
   // Auditoria UX P7: mascaras progressivas enquanto digita.
   const maskCpf = (v: string) => v.replace(/\D/g, '').slice(0, 11)
@@ -2032,6 +2056,18 @@ function ReceiptPage() {
   const race = registration ? getRaceById(registration.raceId) : null;
   const payment = registration ? getPaymentByRegistration(registration.id) : null;
 
+  // Auditoria UX G7: QR Code do código de confirmação para leitura na retirada do kit.
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const code = registration?.confirmationCode;
+    if (!code || isDemoMode) { setQrDataUrl(null); return; }
+    QRCode.toDataURL(String(code), { width: 320, margin: 1 })
+      .then(url => { if (!cancelled) setQrDataUrl(url); })
+      .catch(() => { /* QR é opcional — o código em texto continua visível */ });
+    return () => { cancelled = true; };
+  }, [registration?.confirmationCode]);
+
   if (!registration && !fetchAttempted) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -2069,7 +2105,7 @@ function ReceiptPage() {
     );
   }
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     // Gera o comprovante em PDF (jsPDF já incluído no projeto)
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const pageW = doc.internal.pageSize.getWidth();
@@ -2107,6 +2143,13 @@ function ReceiptPage() {
     doc.text(registration.confirmationCode || '-', pageW / 2, y, { align: 'center' });
     y += 10;
 
+    // G7: QR Code do código de confirmação (leitura na retirada do kit)
+    try {
+      const qr = await QRCode.toDataURL(String(registration.confirmationCode || ''), { width: 320, margin: 1 });
+      doc.addImage(qr, 'PNG', (pageW - 40) / 2, y, 40, 40);
+      y += 44;
+    } catch { /* sem QR — o código em texto acima já basta */ }
+
     doc.setDrawColor(203, 213, 225);
     doc.line(marginX, y, pageW - marginX, y);
     y += 10;
@@ -2136,8 +2179,17 @@ function ReceiptPage() {
     y += 4;
 
     sectionTitle('Participante');
-    row('Nome', user.name);
-    row('CPF', user.cpf);
+    // G7: dados do PARTICIPANTE da inscrição (não da conta de login — pode ser pai/mãe inscrevendo filho)
+    const partName = [registration.participantFirstName, registration.participantLastName].filter(Boolean).join(' ') || user.name;
+    row('Nome', partName);
+    row('CPF', registration.participantCpf || user.cpf);
+    if (registration.participantEmail) row('E-mail', registration.participantEmail);
+    if (registration.participantPhone) row('Telefone', registration.participantPhone);
+    y += 4;
+
+    sectionTitle('Retirada do Kit');
+    row('Data/Hora', race.kitPickup ? String(race.kitPickup) : 'Consulte o e-mail de confirmação do organizador');
+    row('Local', race.kitPickupLocation || race.location || 'A definir pelo organizador');
     y += 4;
 
     sectionTitle('Inscrição');
@@ -2209,9 +2261,39 @@ function ReceiptPage() {
 
             <div>
               <h3 className="font-bold mb-3 flex items-center gap-2 text-slate-900"><User className="w-5 h-5 text-sky-600" /> Participante</h3>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><p className="text-slate-500">Nome</p><p className="font-medium text-slate-900">{user.name}</p></div>
-                <div><p className="text-slate-500">CPF</p><p className="font-medium text-slate-900">{user.cpf}</p></div>
+              {/* G7: dados do participante da inscrição (quem corre), com fallback p/ conta de login */}
+              {(() => {
+                const partName = [registration.participantFirstName, registration.participantLastName].filter(Boolean).join(' ') || user.name;
+                return (
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div><p className="text-slate-500">Nome</p><p className="font-medium text-slate-900">{partName}</p></div>
+                    <div><p className="text-slate-500">CPF</p><p className="font-medium text-slate-900">{registration.participantCpf || user.cpf}</p></div>
+                    {(registration.participantEmail || registration.participantPhone) && (
+                      <>
+                        <div><p className="text-slate-500">E-mail</p><p className="font-medium text-slate-900 break-all">{registration.participantEmail || user.email}</p></div>
+                        <div><p className="text-slate-500">Telefone</p><p className="font-medium text-slate-900">{registration.participantPhone || user.phone}</p></div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div>
+              <h3 className="font-bold mb-3 flex items-center gap-2 text-slate-900"><QrCode className="w-5 h-5 text-emerald-600" /> Retirada do Kit</h3>
+              <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
+                {qrDataUrl ? (
+                  <img src={qrDataUrl} alt={`QR Code do código ${registration.confirmationCode}`} className="w-40 h-40 mx-auto rounded-lg bg-white p-2 border border-slate-200" />
+                ) : (
+                  <p className="text-xs text-slate-400 text-center">Apresente o código acima na retirada.</p>
+                )}
+                <p className="text-xs text-slate-500 text-center">Mostre este QR Code (ou digite o código) na retirada do kit.</p>
+                <div className="text-sm">
+                  <p className="text-slate-500">Quando</p>
+                  <p className="font-medium text-slate-900">{race.kitPickup || 'Será informado pelo organizador — acompanhe seu e-mail.'}</p>
+                  <p className="text-slate-500 mt-2">Onde</p>
+                  <p className="font-medium text-slate-900">{race.kitPickupLocation || race.location || 'A definir pelo organizador'}</p>
+                </div>
               </div>
             </div>
 
