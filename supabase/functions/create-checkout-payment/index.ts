@@ -1,26 +1,10 @@
-// ============================================
-// CREATE CHECKOUT PAYMENT (MERCADO PAGO) - SUPABASE EDGE FUNCTION
-// ============================================
-// Deploy: supabase functions deploy create-checkout-payment
-//
-// Cria uma "preferência" de Checkout Pro no Mercado Pago e devolve o
-// init_point (URL oficial de checkout). O pagamento é concluído na
-// página do Mercado Pago (PIX, cartão, boleto...) — seguro, sem tocar
-// dados de cartão no nosso frontend.
-//
-// ATUALIZAÇÃO AUTOMÁTICA DE STATUS:
-//   1. notification_url -> mercadopago-webhook atualiza payments + registrations
-//      no banco assim que o MP aprova/rejeita o pagamento.
-//   2. back_urls (success/failure/pending) -> o comprador volta para o nosso
-//      site, onde a PaymentPage confirma o status direto na API do MP.
-
+// CREATE CHECKOUT PAYMENT (MERCADO PAGO) - versão corrigida
+// Corrige: (1) permitia criar novo checkout/pagamento para inscrição JÁ CONFIRMADA
+// (cobrança duplicada); (2) quebrava com TypeError quando não havia usuário logado
+// e faltava nome/e-mail do participante.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-// Variáveis de ambiente: aceita tanto os secrets customizados criados no
-// dashboard (PROJECT_URL / ANON_KEY / SERVICE_ROLE_KEY) quanto as variáveis
-// nativas do Supabase, caso existam. Assim funciona independentemente de
-// qual nome foi usado na configuração.
 const getEnv = (...names: string[]): string => {
   for (const n of names) {
     const v = Deno.env.get(n);
@@ -36,10 +20,6 @@ const SERVICE_ROLE_KEY = () => getEnv("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE
 const getCorsHeaders = (req: Request) => ({
   "Access-Control-Allow-Origin": req.headers.get("Origin") || "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  // IMPORTANTE: a lista abaixo precisa cobrir TODO header enviado pelo navegador.
-  // O SDK do Supabase envia automaticamente "x-supabase-access-token" quando há
-  // sessão ativa — se ele não estiver autorizado no preflight, o CORS bloqueia a
-  // requisição e o site mostra "Não foi possível conectar ao servidor".
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-app-url, x-supabase-api-version, x-supabase-access-token, x-canonical-url, x-session-id",
 });
@@ -47,7 +27,6 @@ const getCorsHeaders = (req: Request) => ({
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
-    // max-age cacheia o preflight por 1 dia, reduzindo travas de CORS repetidas
     return new Response(null, {
       status: 204,
       headers: { ...corsHeaders, "Access-Control-Max-Age": "86400" },
@@ -60,8 +39,6 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
 
-    // Cliente com o token do usuário (se houver). Sem header de auth,
-    // getUser() simplesmente retorna user = null e caímos no modo serviço.
     const supabase = createClient(PROJECT_URL(), ANON_KEY(), {
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
@@ -75,9 +52,6 @@ serve(async (req) => {
       }
     }
 
-    // Fallback: aba anônima / sessão expirada -> service role (bypassa RLS).
-    // A inscrição é buscada por ID; a surface de risco é mínima porque o
-    // checkout só devolve a URL do Mercado Pago para o próprio pagador.
     let supabaseAdmin = null as any;
     if (!user) {
       const serviceKey = SERVICE_ROLE_KEY();
@@ -100,8 +74,12 @@ serve(async (req) => {
     }
 
     if (regError || !registration) throw new Error("Inscrição não encontrada.");
-    // Preço: usa o salvo na inscrição; senão procura o kit pelo ID/nome no JSON
-    // do evento; por fim as distâncias (legado). Tudo defensivo contra null/string.
+
+    // NOVO: não gera novo checkout para inscrição já paga (evita cobrança duplicada)
+    if (registration.status === "confirmed") {
+      throw new Error("Esta inscrição já está paga e confirmada. Nenhum novo pagamento é necessário.");
+    }
+
     let amount = Number(registration.price ?? 0);
     if (!Number.isFinite(amount) || amount <= 0) {
       const raceRow = await db
@@ -133,7 +111,6 @@ serve(async (req) => {
     const eventName = registration.races?.name || "Inscrição Smart Brasil Ticket";
     const description = `Inscrição - ${eventName}${registration.kit_name ? ` (${registration.kit_name})` : ""}`;
 
-    // 1) Criar preferência de Checkout Pro
     const mpResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
@@ -153,15 +130,12 @@ serve(async (req) => {
           },
         ],
         payer: {
-          name: registration.participant_first_name || ((user as any).user_metadata)?.full_name?.split(" ")[0] || "Participante",
+          name: registration.participant_first_name || user?.user_metadata?.full_name?.split(" ")[0] || "Participante",
           surname: registration.participant_last_name || undefined,
-          email: registration.participant_email || (user as any).email || undefined,
+          email: registration.participant_email || user?.email || undefined,
         },
-        // external_reference = código de confirmação: permite ao webhook localizar a inscrição
         external_reference: registration.confirmation_code,
-        // Webhook: atualização automática do status no banco
         notification_url: `${PROJECT_URL()}/functions/v1/mercadopago-webhook`,
-        // Retorno do comprador para o site (confirmação em tela também é automática)
         back_urls: {
           success: `${appUrl}/pagamento/${registrationId}?status=approved`,
           failure: `${appUrl}/pagamento/${registrationId}?status=rejected`,
@@ -184,7 +158,6 @@ serve(async (req) => {
 
     const preference = await mpResponse.json();
 
-    // 2) Registrar o pagamento pendente no banco (coluna mp_init_point adicionada pelo SQL)
     const serviceFee = Math.round(amount * 0.05 * 100) / 100;
     const { data: paymentRecord, error: payErr } = await db
       .from("payments")
