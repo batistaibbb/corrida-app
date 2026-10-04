@@ -8,6 +8,7 @@ import EventForm from './components/EventForm';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatusColor, canRegister } from './utils/raceStatus';
+import { showToast, ToastHost } from './utils/toast';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -591,6 +592,11 @@ function LoginPage() {
   const [error, setError] = useState('');
   const { login, register } = useAuth();
   const navigate = useNavigate();
+  // Auditoria UX P2: destino original em ?from= - apos autenticar, o usuario
+  // volta ao ponto onde estava (ex.: inscricao iniciada) em vez de /minha-conta.
+  const location = useLocation();
+  const fromParam = new URLSearchParams(location.search).get('from');
+  const isSafeRedirect = !!fromParam && fromParam.startsWith('/') && !fromParam.startsWith('//');
   const [formData, setFormData] = useState({ name: '', email: '', password: '', cpf: '', phone: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -601,6 +607,11 @@ function LoginPage() {
         // Wait a bit for user context to update, then redirect based on role
         setTimeout(() => {
           const currentUser = JSON.parse(localStorage.getItem('rb_session') || 'null');
+          // P2: fluxo iniciado antes do login tem prioridade sobre o destino padrao.
+          if (isSafeRedirect && (!currentUser || currentUser.role !== 'admin')) {
+            navigate(fromParam!, { replace: true });
+            return;
+          }
           if (currentUser && currentUser.role === 'admin') {
             navigate('/admin');
           } else {
@@ -612,7 +623,7 @@ function LoginPage() {
       }
     } else {
       const result = await register({ ...formData, role: 'participant' });
-      if (result.success) navigate('/minha-conta');
+      if (result.success) navigate(isSafeRedirect ? fromParam! : '/minha-conta', { replace: isSafeRedirect });
       else setError(result.message);
     }
   };
@@ -676,7 +687,12 @@ function RaceDetailsPage() {
   if (!race) return <div className="text-center py-20">Evento não encontrado</div>;
 
   const handleRegister = () => {
-    if (!user) { navigate('/login'); return; }
+    if (!user) {
+      // Auditoria UX P2: levar o destino - apos login/registro volta direto para a inscricao.
+      const target = `/inscricao/${race.id}${selectedDistance ? `?distance=${selectedDistance}` : ''}`;
+      navigate(`/login?from=${encodeURIComponent(target)}`);
+      return;
+    }
     if (!selectedDistance) return;
     navigate(`/inscricao/${race.id}?distance=${selectedDistance}`);
   };
@@ -690,7 +706,7 @@ function RaceDetailsPage() {
       });
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert('Link copiado!');
+      showToast('Link copiado!', 'success');
     }
   };
 
@@ -1041,24 +1057,81 @@ function RegistrationPage() {
     emergencyName: '', emergencyPhone: '', acceptTerms: false, acceptMedical: false 
   });
 
-  if (!race || !user) return <div className="text-center py-20">Dados inválidos</div>;
+  // Auditoria UX P8: pre-preencher dados pessoais a partir do perfil - hoje o
+  // usuario logado digita tudo de novo mesmo tendo nome/email/CPF/telefone salvos.
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        firstName: prev.firstName || (user.name || '').split(' ')[0] || '',
+        lastName: prev.lastName || (user.name || '').split(' ').slice(1).join(' ') || '',
+        email: prev.email || user.email || '',
+        phone: prev.phone || user.phone || '',
+        cpf: prev.cpf || user.cpf || '',
+      }));
+    }
+  }, [user]);
+
+  // Auditoria UX P2: deslogado aqui (link direto/refresh) -> login com retorno garantido.
+  if (!race || !user) {
+    if (!user) return <Navigate to={`/login?from=${encodeURIComponent(`/inscricao/${id || ''}`)}`} replace />;
+    return <div className="text-center py-20">Dados inválidos</div>;
+  }
+
+  // Auditoria UX P7: mascaras progressivas enquanto digita.
+  const maskCpf = (v: string) => v.replace(/\D/g, '').slice(0, 11)
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  const maskPhone = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 11);
+    if (d.length <= 2) return d.length ? `(${d}` : '';
+    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  };
+  const maskZip = (v: string) => v.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1-$2');
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value }));
+    let next = value;
+    if (name === 'cpf') next = maskCpf(value);
+    else if (name === 'phone' || name === 'emergencyPhone') next = maskPhone(value);
+    else if (name === 'zipCode') next = maskZip(value);
+    else if (name === 'state') next = value.toUpperCase().slice(0, 2);
+    setFormData(prev => ({ ...prev, [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : next }));
   };
 
   const getSelectedKit = () => {
     return race.kits?.find(k => k.id === selectedKit);
   };
 
+  // Auditoria UX P3: validacao real de CPF (digitos verificadores).
+  const isValidCpf = (raw: string) => {
+    const cpf = raw.replace(/\D/g, '');
+    if (cpf.length !== 11 || /^([0-9])\1{10}$/.test(cpf)) return false;
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += parseInt(cpf[i]) * (11 - i);
+    let d1 = (sum * 10) % 11; if (d1 === 10) d1 = 0;
+    if (d1 !== parseInt(cpf[9])) return false;
+    sum = 0;
+    for (let i = 0; i < 10; i++) sum += parseInt(cpf[i]) * (10 - i);
+    let d2 = (sum * 10) % 11; if (d2 === 10) d2 = 0;
+    return d2 === parseInt(cpf[10]);
+  };
+
   const handleSubmit = async () => {
     const kit = getSelectedKit();
     // Validação explícita: sem preço numérico válido a tela de pagamento quebraria
     if (!kit || !Number.isFinite(Number(kit.price)) || Number(kit.price) <= 0) {
-      alert('O preço do kit selecionado é inválido. Edite o evento no painel admin e defina um preço (número maior que zero).');
+      showToast('O preço do kit selecionado é inválido. Edite o evento no painel admin e defina um preço (número maior que zero).', 'error', 6000);
       return;
     }
+    // P3: bloquear envio com dados invalidos ANTES de criar a inscricao pendente
+    if (!isValidCpf(formData.cpf)) { showToast('CPF inválido. Verifique os números informados.', 'error'); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) { showToast('E-mail inválido.', 'error'); return; }
+    if (formData.phone.replace(/\D/g, '').length < 10) { showToast('Telefone incompleto — inclua DDD.', 'error'); return; }
+    if (formData.birthDate && new Date(formData.birthDate) > new Date()) { showToast('Data de nascimento não pode ser no futuro.', 'error'); return; }
     try {
       const regId = await addRegistration({
         userId: user.id,
@@ -1084,7 +1157,7 @@ function RegistrationPage() {
       navigate(`/pagamento/${regId}`);
     } catch (error) {
       console.error('Erro ao criar inscrição:', error);
-      alert(`Erro ao criar inscrição: ${error instanceof Error ? error.message : 'tente novamente'}.`);
+      showToast(`Erro ao criar inscrição: ${error instanceof Error ? error.message : 'tente novamente'}.`, 'error', 6000);
     }
   };
 
@@ -1124,7 +1197,12 @@ function RegistrationPage() {
                           ))}
                         </ul>
                         <div className="flex justify-between items-center">
-                          <span className="text-2xl font-bold text-emerald-600">R$ {formatBRL(kit.price)}</span>
+                          <span className="text-2xl font-bold text-emerald-600">
+                            {(race.discount ?? 0) > 0 && (
+                              <span className="text-sm font-normal text-slate-400 line-through mr-2">R$ {formatBRL(toSafeNumber(kit.price))}</span>
+                            )}
+                            R$ {formatBRL(discounted(toSafeNumber(kit.price), race.discount))}
+                          </span>
                           {kit.distance && kit.distance > 0 && (
                             <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs font-semibold rounded">
                               {kit.distance}km
@@ -1169,7 +1247,7 @@ function RegistrationPage() {
                 </select>
                 <div className="flex gap-3">
                   <button onClick={() => setStep(1)} className="px-6 py-3 border rounded-xl">Voltar</button>
-                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !formData.email || !formData.cpf} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
+                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email) || formData.cpf.replace(/\D/g, '').length !== 11} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
                 </div>
               </div>
             )}
@@ -1253,7 +1331,14 @@ function RegistrationPage() {
                   {formData.tshirtSize && (
                     <div className="flex justify-between"><span className="text-gray-500">Camisa</span><span className="font-medium">Tam. {formData.tshirtSize}</span></div>
                   )}
-                  <div className="flex justify-between pt-3 border-t"><span className="font-bold">Total</span><span className="font-bold text-emerald-600">R$ {formatBRL(getSelectedKit()?.price)}</span></div>
+                  {(race.discount ?? 0) > 0 && (
+                    <div className="flex justify-between text-xs text-emerald-600">
+                      <span>Desconto do evento ({race.discount}%)</span>
+                      <span>- R$ {formatBRL(toSafeNumber(getSelectedKit()?.price) - discounted(toSafeNumber(getSelectedKit()?.price), race.discount))}</span>
+                    </div>
+                  )}
+                  {/* P5: total exibido = preco cobrado (com desconto), igual ao persistido na inscricao */}
+                  <div className="flex justify-between pt-3 border-t"><span className="font-bold">Total</span><span className="font-bold text-emerald-600">R$ {formatBRL(discounted(toSafeNumber(getSelectedKit()?.price), race.discount))}</span></div>
                 </>
               )}
             </div>
@@ -1685,7 +1770,7 @@ function PaymentPage() {
     {
       // Modo demo: mantém o fluxo de demonstração local
       if (!cardData.number || !cardData.name || !cardData.expiry || !cardData.cvv) {
-        alert('Preencha todos os dados do cartão');
+        showToast('Preencha todos os dados do cartão', 'error');
         return;
       }
       setProcessing(true);
@@ -2477,7 +2562,7 @@ function AdminDashboard() {
                                 await updateRace(race.id, { published: !race.published });
                               } catch (error) {
                                 console.error('Erro ao atualizar publicação:', error);
-                                alert('Erro ao atualizar status. Tente novamente.');
+                                showToast('Erro ao atualizar status. Tente novamente.', 'error');
                               }
                             }} 
                             className={`p-1.5 rounded ${race.published ? 'text-orange-600 hover:bg-orange-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
@@ -2492,7 +2577,7 @@ function AdminDashboard() {
                                 await updateRace(race.id, { registrationStatus: newStatus });
                               } catch (error) {
                                 console.error('Erro ao atualizar inscrições:', error);
-                                alert('Erro ao atualizar status. Tente novamente.');
+                                showToast('Erro ao atualizar status. Tente novamente.', 'error');
                               }
                             }} 
                             className={`p-1.5 rounded ${race.registrationStatus === 'upcoming' ? 'text-slate-600 hover:bg-slate-50' : 'text-emerald-600 hover:bg-emerald-50'}`}
@@ -2504,7 +2589,7 @@ function AdminDashboard() {
                             // Auditoria UX A1: bloquear exclusão de evento com inscritos.
                             const inscritos = registrations.filter(r => r.raceId === race.id).length;
                             if (inscritos > 0) {
-                              alert(`Não é possível excluir: este evento tem ${inscritos} inscrição(ões). Encerre as inscrições ou cancele-as antes.`);
+                              showToast(`Não é possível excluir: este evento tem ${inscritos} inscrição(ões). Encerre as inscrições ou cancele-as antes.`, 'error', 6000);
                               return;
                             }
                             if (confirm(`Excluir permanentemente o evento "${race.name}"?`)) {
@@ -2512,7 +2597,7 @@ function AdminDashboard() {
                               await deleteRace(race.id);
                             } catch (error) {
                               console.error('Erro ao excluir:', error);
-                              alert('Erro ao excluir evento. Tente novamente.');
+                              showToast('Erro ao excluir evento. Tente novamente.', 'error');
                             }
                           }}} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Excluir">
                             <Trash2 className="w-4 h-4" />
@@ -2621,7 +2706,7 @@ function AdminDashboard() {
                         <td className="px-4 py-4 text-sm">{race?.name || 'N/A'}</td>
                         <td className="px-4 py-4 text-sm">{reg.kitName || '-'}</td>
                         <td className="px-4 py-4 text-sm">{reg.tshirtSize || 'N/A'}</td>
-                        <td className="px-4 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{reg.status === 'confirmed' ? 'Confirmado' : 'Pendente'}</span></td>
+                        <td className="px-4 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : reg.status === 'pending_payment' ? 'bg-orange-100 text-orange-700' : reg.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{reg.status === 'confirmed' ? 'Confirmado' : reg.status === 'pending_payment' ? 'Aguardando pgto' : reg.status === 'cancelled' ? 'Cancelado' : 'Em processamento'}</span></td>
                         <td className="px-4 py-4 text-right">
                           <button
                             onClick={() => setSelectedRegistration(reg)}
@@ -2671,7 +2756,7 @@ function AdminDashboard() {
                           await approvePayment(payment.id);
                         } catch (error) {
                           console.error('Erro ao aprovar pagamento:', error);
-                          alert('Erro ao aprovar pagamento. Tente novamente.');
+                          showToast('Erro ao aprovar pagamento. Tente novamente.', 'error');
                         }
                       }} className="p-1.5 text-green-600 hover:bg-green-50 rounded" title="Aprovar pagamento"><CheckCircle className="w-4 h-4" /></button>}</td>
                     </tr>
@@ -2699,7 +2784,7 @@ function AdminDashboard() {
               setEditingRace(null);
             } catch (error) {
               console.error('Erro ao salvar evento:', error);
-              alert('Erro ao salvar evento. Tente novamente.');
+              showToast('Erro ao salvar evento. Tente novamente.', 'error');
             }
           }}
           onClose={() => { setShowForm(false); setEditingRace(null); }}
@@ -2794,8 +2879,17 @@ function ParticipantDashboard() {
                         <p className="text-xs font-mono text-gray-400 mt-1">Código: {reg.confirmationCode}</p>
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${reg.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                          {reg.status === 'confirmed' ? '✅ Confirmado' : '⏳ Pendente'}
+                        {/* Auditoria UX G6: cada estado tem rotulo e cor proprios - "Pendente" generico confundia */}
+                        <span className={`px-3 py-1 text-xs font-medium rounded-full ${
+                          reg.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                          reg.status === 'pending_payment' ? 'bg-orange-100 text-orange-700' :
+                          reg.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                          'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {reg.status === 'confirmed' ? '✅ Confirmado' :
+                           reg.status === 'pending_payment' ? '💳 Aguardando pagamento' :
+                           reg.status === 'cancelled' ? '❌ Cancelado' :
+                           '⏳ Em processamento'}
                         </span>
                         {reg.status === 'pending_payment' && (
                           <Link to={`/pagamento/${reg.id}`} className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white text-xs font-medium rounded-lg">Pagar Agora</Link>
@@ -2831,6 +2925,7 @@ function ParticipantDashboard() {
 function App() {
   return (
     <Router>
+      <ToastHost />
       <AuthProvider>
         <DataProvider>
           <ErrorBoundary>
