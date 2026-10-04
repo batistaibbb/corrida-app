@@ -8,7 +8,8 @@ Você disse que conseguiu fazer as integrações. Vamos verificar se tudo está 
 - [ ] Você criou o arquivo `.env.local`?
 - [ ] Adicionou `VITE_SUPABASE_URL`?
 - [ ] Adicionou `VITE_SUPABASE_ANON_KEY`?
-- [ ] Adicionou `VITE_MERCADOPAGO_PUBLIC_KEY`?
+
+> ℹ️ Credenciais do Mercado Pago não vão no frontend (`VITE_*`). O Access Token é configurado nas Edge Functions: `supabase secrets set MERCADOPAGO_ACCESS_TOKEN=...`
 
 ### 2. Supabase
 - [ ] Projeto criado em supabase.com?
