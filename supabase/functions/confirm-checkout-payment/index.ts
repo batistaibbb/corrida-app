@@ -3,17 +3,12 @@
 // (qualquer payment_id aprovado, de qualquer valor, confirmava qualquer inscrição).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { MP_ACCESS_TOKEN, PROJECT_URL, SERVICE_ROLE_KEY } from "../_shared/env.ts";
+import { getCorsHeaders as baseCorsHeaders, corsResponse } from "../_shared/cors.ts";
 
-const getEnv = (...names: string[]): string => {
-  for (const n of names) { const v = Deno.env.get(n); if (v) return v; }
-  return "";
-};
-const PROJECT_URL = () => getEnv("PROJECT_URL", "SUPABASE_URL");
-const SERVICE_ROLE_KEY = () => getEnv("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY");
-
+// Invoked with the Supabase access token in a custom header (x-supabase-access-token).
 const getCorsHeaders = (req: Request) => ({
-  "Access-Control-Allow-Origin": req.headers.get("Origin") || "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  ...baseCorsHeaders(req),
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-app-url, x-supabase-api-version, x-supabase-access-token, x-canonical-url, x-session-id",
 });
@@ -23,7 +18,7 @@ serve(async (req) => {
   const reply = (obj: unknown, status = 200) =>
     new Response(JSON.stringify(obj), { status, headers: { ...cors, "Content-Type": "application/json" } });
   if (req.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: { ...cors, "Access-Control-Max-Age": "86400" } });
+    return corsResponse(cors);
   }
 
   try {
@@ -41,7 +36,7 @@ serve(async (req) => {
 
     if (registration.status === "confirmed") return reply({ success: true, alreadyConfirmed: true });
 
-    const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+    const accessToken = MP_ACCESS_TOKEN();
     const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${encodeURIComponent(String(mpPaymentId))}`, {
       headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     });

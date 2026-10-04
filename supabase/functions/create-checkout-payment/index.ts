@@ -4,22 +4,14 @@
 // e faltava nome/e-mail do participante.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { MP_ACCESS_TOKEN, PROJECT_URL, ANON_KEY, SERVICE_ROLE_KEY } from "../_shared/env.ts";
+import { getCorsHeaders as baseCorsHeaders, corsResponse } from "../_shared/cors.ts";
 
-const getEnv = (...names: string[]): string => {
-  for (const n of names) {
-    const v = Deno.env.get(n);
-    if (v) return v;
-  }
-  return "";
-};
-
-const PROJECT_URL = () => getEnv("PROJECT_URL", "SUPABASE_URL");
-const ANON_KEY = () => getEnv("ANON_KEY", "SUPABASE_ANON_KEY");
-const SERVICE_ROLE_KEY = () => getEnv("SERVICE_ROLE_KEY", "SUPABASE_SERVICE_ROLE_KEY");
-
+// This function is invoked with the Supabase access token in a custom header
+// (x-supabase-access-token), so it needs that extra allowed header on top of
+// the shared CORS defaults.
 const getCorsHeaders = (req: Request) => ({
-  "Access-Control-Allow-Origin": req.headers.get("Origin") || "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  ...baseCorsHeaders(req),
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-app-url, x-supabase-api-version, x-supabase-access-token, x-canonical-url, x-session-id",
 });
@@ -27,10 +19,7 @@ const getCorsHeaders = (req: Request) => ({
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 204,
-      headers: { ...corsHeaders, "Access-Control-Max-Age": "86400" },
-    });
+    return corsResponse(corsHeaders);
   }
 
   try {
@@ -105,8 +94,7 @@ serve(async (req) => {
       req.headers.get("x-app-url") ||
       "https://smartbrasilticket.vercel.app";
 
-    const accessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-    if (!accessToken) throw new Error("MERCADOPAGO_ACCESS_TOKEN não configurado na Edge Function");
+    const accessToken = MP_ACCESS_TOKEN();
 
     const eventName = registration.races?.name || "Inscrição Smart Brasil Ticket";
     const description = `Inscrição - ${eventName}${registration.kit_name ? ` (${registration.kit_name})` : ""}`;

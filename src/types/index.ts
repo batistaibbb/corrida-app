@@ -48,6 +48,9 @@ export interface Race {
   regulationPdf?: string;
   // Mapa do percurso (URL da imagem)
   routeMap?: string;
+  // Auditoria UX G7: informações de retirada do kit exibidas no comprovante
+  kitPickup?: string;
+  kitPickupLocation?: string;
 }
 
 export interface RaceDistance {

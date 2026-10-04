@@ -7,8 +7,14 @@ import { supabase, isDemoMode } from '../lib/supabase';
 // após a migração e já causaram inconsistências de estado de login.
 try {
   if (!isDemoMode) {
+    // Auditoria UX P4: em modo produção (Supabase configurado), NENHUM dado de
+    // demonstração (usuários com senha em texto plano, sessões fictícias,
+    // eventos/inscrições/pagamentos fake) pode permanecer ativo no navegador.
     localStorage.removeItem('rb_session');
     localStorage.removeItem('rb_users');
+    localStorage.removeItem('rb_races');
+    localStorage.removeItem('rb_registrations');
+    localStorage.removeItem('rb_payments');
   }
 } catch { /* storage indisponível */ }
 

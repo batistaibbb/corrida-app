@@ -1,4 +1,5 @@
 import { Race } from '../types';
+import { format, parseISO } from 'date-fns';
 
 /**
  * Determina o status de inscrição baseado na data do evento
@@ -29,10 +30,16 @@ export function isEventVisible(race: Race): boolean {
 }
 
 /**
- * Verifica se é possível se inscrever no evento
+ * Verifica se é possível se inscrever no evento.
+ * Auditoria UX P1: além de published/registrationStatus, bloqueia eventos com
+ * data já passada — o status derivado (getRegistrationStatus) mostra "Encerrado",
+ * mas sem este check o botão de inscrição continuava ativo via campo cru do banco.
  */
 export function canRegister(race: Race): boolean {
-  return race.published && race.registrationStatus === 'upcoming';
+  if (!race.published || race.registrationStatus !== 'upcoming') return false;
+  const eventDate = new Date(race.date);
+  if (!isNaN(eventDate.getTime()) && eventDate < new Date()) return false;
+  return true;
 }
 
 /**
@@ -48,6 +55,43 @@ export function getRegistrationStatusText(status: 'upcoming' | 'closed' | 'finis
       return 'Evento Encerrado';
   }
 }
+
+/**
+ * Auditoria UX G1: data/hora legível e segura para exibição.
+ * Evita crash de parseISO("") em telas críticas (Minhas Inscrições).
+ */
+export function formatEventDate(date?: string, time?: string): string {
+  if (!date) return 'Data a confirmar';
+  const d = parseISO(date);
+  if (isNaN(d.getTime())) return 'Data a confirmar';
+  const base = format(d, 'dd/MM/yyyy');
+  return time ? `${base} às ${time}` : base;
+}
+
+/**
+ * Auditoria UX G1: label amigável do status da INSCRIÇÃO (distinto do status do
+ * EVENTO). "Em processamento" confundia o participante — na prática significa
+ * que o pagamento foi aprovado e está sendo confirmado no sistema.
+ */
+export function getEnrollmentStatusLabel(reg: {
+  status: string;
+  paymentId?: string;
+}): { text: string; hint?: string } {
+  switch (reg.status) {
+    case 'confirmed':
+      return { text: '✅ Confirmado' };
+    case 'pending_payment':
+      return { text: '💳 Aguardando pagamento' };
+    case 'cancelled':
+      return { text: '❌ Cancelado' };
+    default:
+      // status desconhecido/'processing'
+      return reg.paymentId
+        ? { text: '🕓 Pagamento aprovado, confirmando inscrição…', hint: 'Se não atualizar em alguns minutos, fale com o organizador.' }
+        : { text: '⏳ Em análise pelo organizador' };
+  }
+}
+
 
 /**
  * Retorna a cor do status de inscrição
