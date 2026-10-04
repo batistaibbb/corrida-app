@@ -95,6 +95,9 @@ function convertRaceFromSupabase(race: any): Race {
     distances: (race.distances || []).map((d: any) => ({ ...d, price: toNumeric(d?.price) })),
     kits: (race.kits || []).map((k: any) => ({ ...k, price: toNumeric(k?.price) })),
     shirtSizes: race.shirt_sizes || race.shirtSizes || ['PP', 'P', 'M', 'G', 'GG', 'XGG'],
+    // Auditoria UX P6: retirada do kit (colunas novas via migration 003)
+    kitPickup: race.kit_pickup ?? race.kitPickup ?? undefined,
+    kitPickupLocation: race.kit_pickup_location ?? race.kitPickupLocation ?? undefined,
     createdAt: race.created_at || race.createdAt,
   };
 }
@@ -339,6 +342,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
         discount: race.discount,
         tags: race.tags,
         distances: race.distances,
+        // Auditoria UX P6: retirada do kit (colunas kit_pickup / kit_pickup_location — migration 003)
+        kit_pickup: race.kitPickup || null,
+        kit_pickup_location: race.kitPickupLocation || null,
       };
       
       // Adicionar kits e tamanhos de camisa se disponíveis
@@ -389,6 +395,9 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (data.distances !== undefined) updateData.distances = data.distances;
       if (data.kits !== undefined) updateData.kits = data.kits;
       if (data.shirtSizes !== undefined) updateData.shirt_sizes = data.shirtSizes;
+      // Auditoria UX P6: retirada do kit
+      if (data.kitPickup !== undefined) updateData.kit_pickup = data.kitPickup || null;
+      if (data.kitPickupLocation !== undefined) updateData.kit_pickup_location = data.kitPickupLocation || null;
       
       const { error } = await supabase
         .from('races')

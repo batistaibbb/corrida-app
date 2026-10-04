@@ -393,6 +393,37 @@ export default function EventForm({ race, onSave, onClose, organizerId, organize
                       className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                     />
                   </div>
+
+                  {/* Auditoria UX P6: retirada do kit — exibida no comprovante e na página do participante */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Data/Horário de Retirada do Kit
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.kitPickup}
+                        onChange={(e) => setFormData({ ...formData, kitPickup: e.target.value })}
+                        placeholder="Ex: 12/11, das 10h às 18h (véspera da prova)"
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        Local de Retirada do Kit
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.kitPickupLocation}
+                        onChange={(e) => setFormData({ ...formData, kitPickupLocation: e.target.value })}
+                        placeholder="Ex: Loja oficial — Shopping Center, Campinas/SP"
+                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                      />
+                    </div>
+                    <p className="md:col-span-2 text-xs text-slate-500 -mt-2">
+                      Opcional, mas recomendado: estas informações aparecem no comprovante e no QR Code do participante. Se preenchidas, o comprovante deixa de mostrar "consulte o e-mail do organizador".
+                    </p>
+                  </div>
                 </div>
               )}
 

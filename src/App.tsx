@@ -10,6 +10,7 @@ import { ptBR } from 'date-fns/locale';
 import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatusColor, canRegister, formatEventDate, getEnrollmentStatusLabel } from './utils/raceStatus';
 import { showToast, ToastHost } from './utils/toast';
 import { confirmAction, ConfirmHost } from './utils/confirm';
+import { setEventShareMeta, resetShareMeta } from './utils/shareMeta';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
@@ -696,6 +697,12 @@ function RaceDetailsPage() {
   const [selectedDistance, setSelectedDistance] = useState<number | null>(null);
   const [isFavorite, setIsFavorite] = useState(false);
   const race = id ? getRaceById(id) : null;
+
+  // Auditoria UX T3: meta tags Open Graph dinâmicas (compartilhamento em WhatsApp/FB/LinkedIn).
+  useEffect(() => {
+    if (race) setEventShareMeta(race);
+    return () => resetShareMeta();
+  }, [race?.id]);
 
   if (!race) return <div className="text-center py-20">Evento não encontrado</div>;
 
