@@ -175,9 +175,9 @@ Na raiz do projeto, crie o arquivo `.env.local`:
 VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-# Mercado Pago
-VITE_MERCADOPAGO_PUBLIC_KEY=TEST-YOUR-PUBLIC-KEY
-VITE_MERCADOPAGO_ACCESS_TOKEN=TEST-YOUR-ACCESS-TOKEN
+# ⚠️ O Access Token do Mercado Pago NÃO vai no frontend (nem em variáveis VITE_*).
+# Configure-o como secret do Supabase (server-side, lido pelas Edge Functions):
+supabase secrets set MERCADOPAGO_ACCESS_TOKEN=TEST-YOUR-ACCESS-TOKEN
 ```
 
 ⚠️ **NUNCA** commite este arquivo! Ele está no `.gitignore`.
@@ -242,7 +242,8 @@ Na tela de configuração do projeto:
 |-----|-------|
 | `VITE_SUPABASE_URL` | `https://SEU-PROJETO.supabase.co` |
 | `VITE_SUPABASE_ANON_KEY` | `eyJhbGci...` |
-| `VITE_MERCADOPAGO_PUBLIC_KEY` | `TEST-...` |
+
+> ⚠️ Não adicione credenciais do Mercado Pago aqui — o Access Token fica nos secrets das Edge Functions (`supabase secrets set MERCADOPAGO_ACCESS_TOKEN=...`).
 
 3. Clique em **"Deploy"**
 
@@ -278,7 +279,6 @@ https://smart-brasil-ticket-xyz.vercel.app
 |--------|-------|
 | `VITE_SUPABASE_URL` | URL do seu projeto Supabase |
 | `VITE_SUPABASE_ANON_KEY` | Chave anon do Supabase |
-| `VITE_MERCADOPAGO_PUBLIC_KEY` | Public Key do Mercado Pago |
 | `VERCEL_TOKEN` | Token da Vercel (veja abaixo) |
 | `VERCEL_ORG_ID` | ID da organização Vercel |
 | `VERCEL_PROJECT_ID` | ID do projeto Vercel |

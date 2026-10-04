@@ -40,10 +40,9 @@ Se o build funcionar localmente, o problema é na Vercel.
 ```
 VITE_SUPABASE_URL=https://seu-projeto.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-VITE_MERCADOPAGO_PUBLIC_KEY=TEST-...
 ```
 
-⚠️ **IMPORTANTE:** As variáveis devem começar com `VITE_` para funcionar no frontend!
+⚠️ **IMPORTANTE:** Apenas variáveis do frontend começam com `VITE_`. O Access Token do Mercado Pago NÃO vai na Vercel — configure-o nas Edge Functions: `supabase secrets set MERCADOPAGO_ACCESS_TOKEN=...`
 
 ### **Passo 3: Forçar Novo Deploy**
 
