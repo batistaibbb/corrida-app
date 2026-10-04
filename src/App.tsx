@@ -41,6 +41,11 @@ function Header() {
             <span className="text-xl font-semibold text-slate-900 tracking-tight">
               Smart Brasil Ticket
             </span>
+            {isDemoMode && (
+              <span className="ml-1 px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-bold rounded uppercase tracking-wide" title="Dados fictícios em localStorage — não é produção">
+                Demo
+              </span>
+            )}
           </Link>
 
           <div className="flex items-center gap-3">
@@ -642,9 +647,9 @@ function LoginPage() {
           <button type="submit" className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl hover:from-emerald-700 hover:to-sky-700 transition-all">{isLogin ? 'Entrar' : 'Criar Conta'}</button>
         </form>
 
-        {isLogin && (
+        {isDemoMode && isLogin && (
           <div className="mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
-            <p className="text-xs font-semibold text-sky-700 mb-2">Credenciais de teste:</p>
+            <p className="text-xs font-semibold text-sky-700 mb-2">Credenciais de teste (modo demo):</p>
             <p className="text-xs text-sky-600"><strong>Admin:</strong> admin@smartbrasilticket.com.br / admin123</p>
             <p className="text-xs text-sky-600"><strong>Participante:</strong> joao@email.com / 123456</p>
           </div>

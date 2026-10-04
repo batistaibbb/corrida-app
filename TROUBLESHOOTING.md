@@ -182,13 +182,11 @@ git push -f
 
 ## 💡 Dica Importante
 
-O projeto está configurado para funcionar em **MODO DEMO** quando as variáveis de ambiente não estão configuradas. Isso significa que:
+O **MODO DEMO não é mais ativado automaticamente** (Auditoria UX P4). Ele só funciona quando você define `VITE_DEMO_MODE=true` no `.env.local` E as variáveis do Supabase estão ausentes. Isso significa que:
 
-- ✅ O site deve funcionar mesmo sem Supabase
-- ✅ Usa localStorage como fallback
-- ✅ Todas as funcionalidades básicas funcionam
-
-Se o site não está funcionando mesmo em modo demo, há um problema no build ou deploy.
+- ✅ Em desenvolvimento local, defina `VITE_DEMO_MODE=true` para demonstrações sem Supabase (usa localStorage)
+- ⚠️ NUNCA defina `VITE_DEMO_MODE=true` em produção/Vercel — o modo demo contém logins de teste com senha em texto plano e simulação de aprovação de pagamento
+- ❌ Se o build de produção rodar sem `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`, o app NÃO vira demo silenciosamente: ele fica "não configurado" e registra um erro no console — configure os env vars corretamente na Vercel
 
 ---
 

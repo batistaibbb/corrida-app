@@ -360,7 +360,7 @@ vercel link
 - Na tela de pagamento, escolha **PIX**
 - Clique em **"Gerar PIX"**
 - Em produção, um QR Code real será gerado
-- Na demo, clique em **"Simular Aprovação"**
+- Na demo local (requer `VITE_DEMO_MODE=true` no `.env.local`), clique em **"Simular Aprovação"**
 
 ### 5. Testar Comprovante
 - Após pagamento aprovado, você será redirecionado
