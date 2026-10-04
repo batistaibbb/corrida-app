@@ -7,8 +7,9 @@ import { supabase, isDemoMode, supabaseUrlSafe, supabaseAnonKeySafe } from './li
 import EventForm from './components/EventForm';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatusColor, canRegister } from './utils/raceStatus';
+import { getRegistrationStatus, getRegistrationStatusText, getRegistrationStatusColor, canRegister, formatEventDate, getEnrollmentStatusLabel } from './utils/raceStatus';
 import { showToast, ToastHost } from './utils/toast';
+import { confirmAction, ConfirmHost } from './utils/confirm';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
@@ -2451,7 +2452,7 @@ function RegistrationDetailsModal({ registration, race, onClose }: { registratio
               <h3 className="font-semibold text-slate-900 mb-3">Evento</h3>
               <div className="bg-slate-50 rounded-lg p-4">
                 <p className="font-semibold text-slate-900">{race?.name || 'N/A'}</p>
-                <p className="text-sm text-slate-600 mt-1">{race?.date && format(parseISO(race.date), "dd/MM/yyyy")} às {race?.time}</p>
+                <p className="text-sm text-slate-600 mt-1">{formatEventDate(race?.date, race?.time)}</p>
                 <p className="text-sm text-slate-600">{race?.location}, {race?.city}/{race?.state}</p>
               </div>
             </div>
@@ -2674,7 +2675,14 @@ function AdminDashboard() {
                               showToast(`Não é possível excluir: este evento tem ${inscritos} inscrição(ões). Encerre as inscrições ou cancele-as antes.`, 'error', 6000);
                               return;
                             }
-                            if (confirm(`Excluir permanentemente o evento "${race.name}"?`)) {
+                            // Auditoria UX A5: modal acessível no lugar de window.confirm nativo.
+                            const ok = await confirmAction({
+                              title: 'Excluir evento',
+                              message: `Excluir permanentemente o evento "${race.name}"?\n\nEsta ação não pode ser desfeita.`,
+                              confirmLabel: 'Excluir',
+                              danger: true,
+                            });
+                            if (ok) {
                             try {
                               await deleteRace(race.id);
                             } catch (error) {
@@ -2830,10 +2838,16 @@ function AdminDashboard() {
                       <td className="px-6 py-4"><span className={`px-2 py-1 text-xs font-medium rounded-full ${payment.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{payment.status === 'approved' ? 'Aprovado' : 'Pendente'}</span></td>
                       <td className="px-6 py-4 text-right">{payment.status === 'pending' && <button onClick={async () => {
                         // Auditoria UX A2: confirmar com nome e valor antes de aprovar.
+                        // Auditoria UX A5: modal acessível no lugar de window.confirm nativo.
                         const reg = registrations.find(r => r.id === payment.registrationId);
                         const nome = reg?.participantFirstName ? `${reg.participantFirstName} ${reg.participantLastName || ''}`.trim() : (reg?.userId?.slice(0, 8) || 'participante desconhecido');
                         const evento = reg ? (races.find(x => x.id === reg.raceId)?.name || '') : '';
-                        if (!confirm(`Confirmar pagamento de ${nome}${evento ? ` (${evento})` : ''} no valor de R$ ${formatBRL(payment.total)}?\n\nIsto aprova o pagamento e CONFIRMA a inscrição correspondente.`)) return;
+                        const ok = await confirmAction({
+                          title: 'Aprovar pagamento',
+                          message: `Confirmar pagamento de ${nome}${evento ? ` (${evento})` : ''} no valor de R$ ${formatBRL(payment.total)}?\n\nIsto aprova o pagamento e CONFIRMA a inscrição correspondente. Use também para pagamentos recebidos em dinheiro/espécie.`,
+                          confirmLabel: 'Aprovar pagamento',
+                        });
+                        if (!ok) return;
                         try {
                           await approvePayment(payment.id);
                         } catch (error) {
@@ -2954,25 +2968,27 @@ function ParticipantDashboard() {
                       <div className="flex-1">
                         <h3 className="font-bold">{race.name}</h3>
                         <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-500">
-                          <span>{format(parseISO(race.date), "dd/MM/yyyy")}</span>
+                          {/* Auditoria UX G1: data segura — evita crash de parseISO('') em telas criticas */}
+                          <span>{formatEventDate(race.date, race.time)}</span>
                           <span>📍 {race.city}</span>
                           <span>🏃 {reg.distance}km</span>
                         </div>
                         <p className="text-xs font-mono text-gray-400 mt-1">Código: {reg.confirmationCode}</p>
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        {/* Auditoria UX G6: cada estado tem rotulo e cor proprios - "Pendente" generico confundia */}
+                        {/* Auditoria UX G1/G6: cada estado tem rotulo, cor e explicacao proprios.
+                            "Em processamento" virou texto explicito do que esta acontecendo. */}
                         <span className={`px-3 py-1 text-xs font-medium rounded-full ${
                           reg.status === 'confirmed' ? 'bg-green-100 text-green-700' :
                           reg.status === 'pending_payment' ? 'bg-orange-100 text-orange-700' :
                           reg.status === 'cancelled' ? 'bg-red-100 text-red-700' :
                           'bg-yellow-100 text-yellow-700'
                         }`}>
-                          {reg.status === 'confirmed' ? '✅ Confirmado' :
-                           reg.status === 'pending_payment' ? '💳 Aguardando pagamento' :
-                           reg.status === 'cancelled' ? '❌ Cancelado' :
-                           '⏳ Em processamento'}
+                          {getEnrollmentStatusLabel(reg).text}
                         </span>
+                        {getEnrollmentStatusLabel(reg).hint && (
+                          <p className="text-[11px] text-gray-400 max-w-[200px] text-right">{getEnrollmentStatusLabel(reg).hint}</p>
+                        )}
                         {reg.status === 'pending_payment' && (
                           <Link to={`/pagamento/${reg.id}`} className="px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-600 text-white text-xs font-medium rounded-lg">Pagar Agora</Link>
                         )}
@@ -3008,6 +3024,7 @@ function App() {
   return (
     <Router>
       <ToastHost />
+      <ConfirmHost />
       <AuthProvider>
         <DataProvider>
           <ErrorBoundary>
