@@ -176,7 +176,7 @@ export default function AdminDashboard() {
                               await deleteRace(race.id);
                             } catch (error) {
                               console.error('Erro ao excluir:', error);
-                              showToast('Erro ao excluir evento. Tente novamente.', 'error');
+                              showToast((error as any)?.message || 'Erro ao excluir evento. Tente novamente.', 'error', 7000);
                             }
                           }}} className="p-1.5 text-red-600 hover:bg-red-50 rounded" title="Excluir">
                             <Trash2 className="w-4 h-4" />

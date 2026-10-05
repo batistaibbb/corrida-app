@@ -1,1 +1,0 @@
-const n=t=>{const s=Number(t);return Number.isFinite(s)?s:0},r=t=>{if(!t)return 0;const s=[...(t.distances||[]).map(e=>n(e==null?void 0:e.price)),...(t.kits||[]).map(e=>n(e==null?void 0:e.price))].filter(e=>e>0);return s.length?Math.min(...s):0},i=(t,s)=>n(t)*(1-n(s)/100),o=t=>n(t).toFixed(2).replace(".",",");export{i as d,o as f,r as g,n as t};
