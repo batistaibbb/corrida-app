@@ -13,7 +13,7 @@ import { setEventShareMeta, resetShareMeta } from '../utils/shareMeta';
 import { toSafeNumber, getLowestPrice, discounted, formatBRL } from '../utils/pricing';
 import { safeRedirectTarget } from '../components/ProtectedRoute';
 import { Eye, EyeOff, Trophy } from 'lucide-react';
-import { maskCpf, maskPhone, isOptionalCpfValid } from '../utils/documents';
+import { maskPhone } from '../utils/documents';
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -28,7 +28,9 @@ export default function LoginPage() {
   // P2: valida com whitelist de prefixos legítimos (open-redirect guard reforçado).
   const SAFE_REDIRECT_PREFIXES = ['/inscricao/', '/evento/', '/pagamento/', '/comprovante/', '/minha-conta'];
   const isSafeRedirect = !!fromParam && SAFE_REDIRECT_PREFIXES.some(p => fromParam.startsWith(p));
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', cpf: '', phone: '' });
+  // CPF removido do cadastro (dado sensível + validação vinha bloqueando novos
+  // cadastros). O campo não é mais coletado em lugar nenhum do fluxo.
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', phone: '' });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,15 +55,9 @@ export default function LoginPage() {
         setError(result.message);
       }
     } else {
-      // CPF agora é OPCIONAL no cadastro (dado sensível — evita abandono da conta).
-      // Se preenchido, ainda precisa ser um CPF válido. Normaliza com máscara.
-      if (!isOptionalCpfValid(formData.cpf)) {
-        setError('CPF inválido. Verifique os números informados ou deixe o campo vazio.');
-        return;
-      }
       const result = await register({
         ...formData,
-        cpf: formData.cpf ? maskCpf(formData.cpf) : '',
+        cpf: '',
         phone: formData.phone ? maskPhone(formData.phone) : '',
         role: 'participant',
       });
@@ -110,14 +106,6 @@ export default function LoginPage() {
           </div>
           {!isLogin && (
             <>
-              {/* CPF opcional no cadastro: dado sensível — quem preferir só informa na inscrição */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  CPF <span className="text-slate-400 font-normal">(opcional)</span>
-                </label>
-                <input type="text" inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={formData.cpf} onChange={(e) => setFormData({...formData, cpf: maskCpf(e.target.value)})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
-                <p className="text-xs text-slate-400 mt-1">Não é obrigatório criar a conta. Você poderá informar depois, se preferir.</p>
-              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Telefone <span className="text-rose-600">*</span></label>
                 <input type="tel" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-9999" value={formData.phone} onChange={(e) => setFormData({...formData, phone: maskPhone(e.target.value)})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />

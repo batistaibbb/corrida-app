@@ -12,7 +12,7 @@ import { confirmAction } from '../utils/confirm';
 import { setEventShareMeta, resetShareMeta } from '../utils/shareMeta';
 import { toSafeNumber, getLowestPrice, discounted, formatBRL } from '../utils/pricing';
 import { safeRedirectTarget } from '../components/ProtectedRoute';
-import { isValidCpf, isOptionalCpfValid, maskCpf, maskPhone, maskZip, whatsappLink } from '../utils/documents';
+import { maskCpf, maskPhone, maskZip, whatsappLink } from '../utils/documents';
 import { ArrowLeft } from 'lucide-react';
 
 export default function RegistrationPage() {
@@ -25,14 +25,14 @@ export default function RegistrationPage() {
   const [step, setStep] = useState(1);
   const [selectedKit, setSelectedKit] = useState<string>('');
   const [formData, setFormData] = useState({ 
-    firstName: '', lastName: '', email: '', phone: '', cpf: '', birthDate: '', gender: '', 
+    firstName: '', lastName: '', email: '', phone: '', birthDate: '', gender: '', 
     tshirtSize: '', address: '', city: '', state: '', zipCode: '', 
     emergencyName: '', emergencyPhone: '', acceptTerms: false, acceptMedical: false,
     responsibleName: '', responsibleCpf: '' 
   });
 
   // Auditoria UX P8: pre-preencher dados pessoais a partir do perfil - hoje o
-  // usuario logado digita tudo de novo mesmo tendo nome/email/CPF/telefone salvos.
+  // usuario logado digita tudo de novo mesmo tendo nome/email/telefone salvos.
   useEffect(() => {
     if (user) {
       setFormData(prev => ({
@@ -41,7 +41,6 @@ export default function RegistrationPage() {
         lastName: prev.lastName || (user.name || '').split(' ').slice(1).join(' ') || '',
         email: prev.email || user.email || '',
         phone: prev.phone || user.phone || '',
-        cpf: prev.cpf || user.cpf || '',
       }));
     }
   }, [user]);
@@ -68,7 +67,7 @@ export default function RegistrationPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     let next = value;
-    if (name === 'cpf' || name === 'responsibleCpf') next = maskCpf(value);
+    if (name === 'responsibleCpf') next = maskCpf(value);
     else if (name === 'phone' || name === 'emergencyPhone') next = maskPhone(value);
     else if (name === 'zipCode') next = maskZip(value);
     else if (name === 'state') next = value.toUpperCase().slice(0, 2);
@@ -80,11 +79,13 @@ export default function RegistrationPage() {
   };
 
 
-  // Menor de idade: exige responsavel legal (nome + CPF valido do responsavel).
+  // Menor de idade: exige responsavel legal (nome + documento do responsavel).
+  // Validacao "leve": so checa o formato (11 digitos) — sem algoritmo de
+  // digitos verificadores, que vinha gerando falsos "CPF invalido".
   const parseResponsibleCpf = (raw: string) => {
     const digits = raw.replace(/\D/g, '');
-    if (!digits) return null; // campo opcional quando maior de idade
-    if (!isValidCpf(digits)) return undefined; // invalido -> bloqueia envio
+    if (!digits) return null; // vazio -> bloqueia apenas p/ menores
+    if (digits.length !== 11) return undefined; // formato incompleto
     return digits;
   };
 
@@ -112,9 +113,7 @@ export default function RegistrationPage() {
       return;
     }
     // P3: bloquear envio com dados invalidos ANTES de criar a inscricao pendente.
-    // CPF passou a ser OPCIONAL aqui tambem (dado sensivel — evita abandono da
-    // inscricao). Se preenchido, precisa ser um CPF valido.
-    if (!isOptionalCpfValid(formData.cpf)) { showToast('CPF inválido. Verifique os números informados ou deixe o campo vazio.', 'error'); return; }
+    // Campo CPF do participante REMOVIDO do formulario (dado sensivel).
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) { showToast('E-mail inválido.', 'error'); return; }
     if (formData.phone.replace(/\D/g, '').length < 10) { showToast('Telefone incompleto — inclua DDD.', 'error'); return; }
     if (formData.birthDate && new Date(formData.birthDate) > new Date()) { showToast('Data de nascimento não pode ser no futuro.', 'error'); return; }
@@ -122,7 +121,7 @@ export default function RegistrationPage() {
     if (isMinor) {
       if (!formData.responsibleName?.trim()) { showToast('Para menores de 18 anos é obrigatório o nome do responsável legal.', 'error'); return; }
       const respCpf = parseResponsibleCpf(formData.responsibleCpf || '');
-      if (respCpf === undefined) { showToast('CPF do responsável inválido. Verifique os números informados.', 'error'); return; }
+      if (respCpf === undefined) { showToast('Informe o CPF do responsável completo (11 dígitos).', 'error'); return; }
       if (respCpf === null) { showToast('Para menores de 18 anos é obrigatório o CPF do responsável legal.', 'error'); return; }
     }
     try {
@@ -144,7 +143,7 @@ export default function RegistrationPage() {
         participantLastName: formData.lastName,
         participantEmail: formData.email,
         participantPhone: formData.phone,
-        participantCpf: formData.cpf,
+        participantCpf: '',
         birthDate: formData.birthDate || undefined,
         gender: formData.gender || undefined,
         address: formData.address || undefined,
@@ -260,16 +259,9 @@ export default function RegistrationPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Telefone <span className="text-rose-600">*</span></label>
                   <input type="tel" name="phone" inputMode="tel" autoComplete="tel" value={formData.phone} onChange={handleChange} placeholder="(11) 99999-9999" className="w-full px-4 py-2.5 border rounded-lg" required />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* CPF opcional: dado sensível — quem preferir pode deixar em branco */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">CPF <span className="text-slate-400 font-normal">(opcional)</span></label>
-                    <input type="text" name="cpf" inputMode="numeric" autoComplete="off" value={formData.cpf} onChange={handleChange} placeholder="000.000.000-00" className="w-full px-4 py-2.5 border rounded-lg" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Data de nascimento <span className="text-rose-600">*</span></label>
-                    <input type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg" required />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Data de nascimento <span className="text-rose-600">*</span></label>
+                  <input type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg" required />
                 </div>
                 {/* Auditoria UX P1/menores: data de nascimento obrigatoria para identificar menor de 18 */}
                 {!formData.birthDate && (
@@ -278,9 +270,9 @@ export default function RegistrationPage() {
                 {isMinor && (
                   <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 space-y-3">
                     <p className="text-sm font-bold text-amber-800">⚠️ Participante menor de 18 anos</p>
-                    <p className="text-xs text-amber-700">É necessário o consentimento do responsável legal, com nome e CPF válidos.</p>
+                    <p className="text-xs text-amber-700">É necessário o consentimento do responsável legal (nome completo e CPF).</p>
                     <input type="text" name="responsibleName" value={formData.responsibleName} onChange={handleChange} placeholder="Nome completo do responsável legal *" className="w-full px-4 py-2.5 border rounded-lg bg-white" />
-                    <input type="text" name="responsibleCpf" value={formData.responsibleCpf} onChange={handleChange} placeholder="CPF do responsável * " className="w-full px-4 py-2.5 border rounded-lg bg-white" inputMode="numeric" />
+                    <input type="text" name="responsibleCpf" value={formData.responsibleCpf} onChange={handleChange} placeholder="CPF do responsável legal *" className="w-full px-4 py-2.5 border rounded-lg bg-white" inputMode="numeric" />
                   </div>
                 )}
                 <div>
@@ -294,7 +286,7 @@ export default function RegistrationPage() {
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setStep(1)} className="px-6 py-3 border rounded-xl">Voltar</button>
-                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email) || formData.phone.replace(/\D/g, '').length < 10 || !formData.birthDate || !isOptionalCpfValid(formData.cpf) || (isMinor && (!formData.responsibleName.trim() || !formData.responsibleCpf.replace(/\D/g, '')))} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
+                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email) || formData.phone.replace(/\D/g, '').length < 10 || !formData.birthDate || (isMinor && (!formData.responsibleName.trim() || !formData.responsibleCpf.replace(/\D/g, '')))} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
                 </div>
               </div>
             )}
