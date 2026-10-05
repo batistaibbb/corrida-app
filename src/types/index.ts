@@ -116,4 +116,13 @@ export interface Registration {
   isMinor?: boolean;
   responsibleName?: string;
   responsibleCpf?: string;
+  // Dados pessoais e aceite (migration 009)
+  birthDate?: string;
+  gender?: string;
+  address?: string;
+  addressCity?: string;
+  addressState?: string;
+  zipCode?: string;
+  termsAcceptedAt?: string;
+  medicalDeclarationAt?: string;
 }

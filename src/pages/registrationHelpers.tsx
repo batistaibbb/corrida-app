@@ -90,6 +90,9 @@ export function exportToExcel(registrations: Registration[], races: Race[]) {
       'Telefone': getParticipantPhone(reg),
       'E-mail': getParticipantEmail(reg),
       'CPF': getParticipantCpf(reg),
+      'Data de Nascimento': reg.birthDate ? format(parseISO(reg.birthDate), 'dd/MM/yyyy') : '',
+      'Sexo': reg.gender || '',
+      'Endereço': [reg.address, reg.addressCity, reg.addressState, reg.zipCode].filter(Boolean).join(' - '),
       'Evento': race?.name || 'N/A',
       'Kit Escolhido': getKitLabel(reg),
       'Valor (R$)': toSafeNumber(reg.price),
@@ -98,7 +101,11 @@ export function exportToExcel(registrations: Registration[], races: Race[]) {
       'Status': reg.status === 'confirmed' ? 'Confirmado' : 'Pendente',
       'Data Inscrição': format(parseISO(reg.createdAt), 'dd/MM/yyyy'),
       'Contato Emergência': reg.emergencyName || 'N/A',
-      'Telefone Emergência': reg.emergencyPhone || 'N/A'
+      'Telefone Emergência': reg.emergencyPhone || 'N/A',
+      'Aceite dos Termos': reg.termsAcceptedAt ? format(parseISO(reg.termsAcceptedAt), 'dd/MM/yyyy HH:mm') : '',
+      'Menor de idade': reg.isMinor ? 'Sim' : 'Não',
+      'Responsável': reg.responsibleName || '',
+      'CPF Responsável': reg.responsibleCpf || ''
     };
   });
   
@@ -164,6 +171,22 @@ export default function RegistrationDetailsModal({ registration, race, onClose }
                 <div>
                   <p className="text-xs text-slate-500">CPF</p>
                   <p className="font-semibold text-slate-900">{getParticipantCpf(registration)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Data de nascimento</p>
+                  <p className="font-semibold text-slate-900">{registration.birthDate ? format(parseISO(registration.birthDate), 'dd/MM/yyyy') : '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Sexo</p>
+                  <p className="font-semibold text-slate-900">{registration.gender || '-'}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-500">Endereço</p>
+                  <p className="font-semibold text-slate-900">{[registration.address, registration.addressCity, registration.addressState, registration.zipCode].filter(Boolean).join(' - ') || '-'}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-slate-500">Aceite dos termos e declaração médica</p>
+                  <p className="font-semibold text-slate-900">{registration.termsAcceptedAt ? format(parseISO(registration.termsAcceptedAt), 'dd/MM/yyyy HH:mm') : '-'}</p>
                 </div>
               </div>
             </div>

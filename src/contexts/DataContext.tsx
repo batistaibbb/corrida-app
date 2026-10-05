@@ -132,6 +132,14 @@ function convertRegistrationFromSupabase(reg: any): Registration {
     isMinor: reg.is_minor === true || reg.isMinor === true,
     responsibleName: reg.responsible_name ?? reg.responsibleName,
     responsibleCpf: reg.responsible_cpf ?? reg.responsibleCpf,
+    birthDate: reg.birth_date ?? reg.birthDate ?? undefined,
+    gender: reg.gender ?? undefined,
+    address: reg.address ?? undefined,
+    addressCity: reg.address_city ?? undefined,
+    addressState: reg.address_state ?? undefined,
+    zipCode: reg.zip_code ?? undefined,
+    termsAcceptedAt: reg.terms_accepted_at ?? undefined,
+    medicalDeclarationAt: reg.medical_declaration_at ?? undefined,
     createdAt: reg.created_at || reg.createdAt,
   };
 }
@@ -463,6 +471,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (reg.participantEmail) insertData.participant_email = reg.participantEmail;
       if (reg.participantPhone) insertData.participant_phone = reg.participantPhone;
       if (reg.participantCpf) insertData.participant_cpf = reg.participantCpf;
+      // Dados pessoais e aceite dos termos (o servidor carimba a data do aceite)
+      if (reg.birthDate) insertData.birth_date = reg.birthDate;
+      if (reg.gender) insertData.gender = reg.gender;
+      if (reg.address) insertData.address = reg.address;
+      if (reg.addressCity) insertData.address_city = reg.addressCity;
+      if (reg.addressState) insertData.address_state = reg.addressState;
+      if (reg.zipCode) insertData.zip_code = reg.zipCode;
+      if (reg.termsAcceptedAt) insertData.terms_accepted_at = reg.termsAcceptedAt;
+      if (reg.medicalDeclarationAt) insertData.medical_declaration_at = reg.medicalDeclarationAt;
       // Consentimento do responsavel legal (menor de idade)
       if (reg.isMinor) {
         insertData.is_minor = true;
