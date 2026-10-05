@@ -98,6 +98,9 @@ function convertRaceFromSupabase(race: any): Race {
     // Auditoria UX P6: retirada do kit (colunas novas via migration 003)
     kitPickup: race.kit_pickup ?? race.kitPickup ?? undefined,
     kitPickupLocation: race.kit_pickup_location ?? race.kitPickupLocation ?? undefined,
+    // Regulamento (PDF) e mapa do percurso — colunas regulation_pdf / route_map
+    regulationPdf: race.regulation_pdf ?? race.regulationPdf ?? undefined,
+    routeMap: race.route_map ?? race.routeMap ?? undefined,
     createdAt: race.created_at || race.createdAt,
   };
 }
@@ -348,6 +351,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         // Auditoria UX P6: retirada do kit (colunas kit_pickup / kit_pickup_location — migration 003)
         kit_pickup: race.kitPickup || null,
         kit_pickup_location: race.kitPickupLocation || null,
+        regulation_pdf: race.regulationPdf || null,
+        route_map: race.routeMap || null,
       };
       
       // Adicionar kits e tamanhos de camisa se disponíveis
@@ -401,6 +406,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // Auditoria UX P6: retirada do kit
       if (data.kitPickup !== undefined) updateData.kit_pickup = data.kitPickup || null;
       if (data.kitPickupLocation !== undefined) updateData.kit_pickup_location = data.kitPickupLocation || null;
+      if (data.regulationPdf !== undefined) updateData.regulation_pdf = data.regulationPdf || null;
+      if (data.routeMap !== undefined) updateData.route_map = data.routeMap || null;
       
       const { error } = await supabase
         .from('races')
