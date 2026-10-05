@@ -390,6 +390,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (data.state !== undefined) updateData.state = data.state;
       if (data.image !== undefined) updateData.image_url = data.image;
       if (data.description !== undefined) updateData.description = data.description;
+      if (data.organizer !== undefined) updateData.organizer_name = data.organizer;
       if (data.maxParticipants !== undefined) updateData.max_participants = data.maxParticipants;
       if (data.category !== undefined) updateData.category = data.category;
       if (data.sport !== undefined) updateData.sport = data.sport;

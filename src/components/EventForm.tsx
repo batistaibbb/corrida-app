@@ -32,8 +32,9 @@ export default function EventForm({ race, onSave, onClose, organizerId, organize
     kitPickupLocation: race?.kitPickupLocation || '',
     image: race?.image || '',
     description: race?.description || '',
-    organizer: organizerName,
-    organizerId,
+    // Ao editar, mantém o organizador do evento; só usa o nome do usuário logado em eventos novos
+    organizer: race?.organizer || organizerName,
+    organizerId: race?.organizerId || organizerId,
     maxParticipants: race?.maxParticipants || 1000,
     category: race?.category || 'Corrida',
     sport: race?.sport || 'corrida',
