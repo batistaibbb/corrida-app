@@ -1,4 +1,5 @@
-// CREATE CHECKOUT PAYMENT (MERCADO PAGO) - versão corrigida
+// CREATE CHECKOUT PAYMENT (MERCADO PAGO) - versão produção
+// (006) Exige login, recalcula o preço no servidor e grava com service role.
 // Corrige: (1) permitia criar novo checkout/pagamento para inscrição JÁ CONFIRMADA
 // (cobrança duplicada); (2) quebrava com TypeError quando não havia usuário logado
 // e faltava nome/e-mail do participante.
@@ -32,6 +33,7 @@ serve(async (req) => {
       global: { headers: authHeader ? { Authorization: authHeader } : {} },
     });
 
+    // Exige usuário autenticado: só o dono da inscrição gera o checkout
     let user = null as any;
     if (authHeader) {
       try {
@@ -40,54 +42,46 @@ serve(async (req) => {
         user = null;
       }
     }
+    if (!user) throw new Error("Faça login para continuar com o pagamento.");
 
-    let supabaseAdmin = null as any;
-    if (!user) {
-      const serviceKey = SERVICE_ROLE_KEY();
-      if (!serviceKey) throw new Error("Usuário não autenticado e SERVICE_ROLE_KEY não configurada");
-      supabaseAdmin = createClient(PROJECT_URL(), serviceKey);
-    }
-
-    const db = supabaseAdmin ?? supabase;
-
-    let registration = null as any;
-    let regError: any = null;
-    if (supabaseAdmin) {
-      const r = await db.from("registrations").select("*, races(name)").eq("id", registrationId).maybeSingle();
-      registration = r.data;
-      regError = r.error;
-    } else {
-      const r = await db.from("registrations").select("*, races(name)").eq("id", registrationId).eq("user_id", user.id).single();
-      registration = r.data;
-      regError = r.error;
-    }
-
+    // Leitura com o token do usuário (RLS garante que a inscrição é dele)
+    const { data: registration, error: regError } = await supabase
+      .from("registrations")
+      .select("*, races(name)")
+      .eq("id", registrationId)
+      .eq("user_id", user.id)
+      .single();
     if (regError || !registration) throw new Error("Inscrição não encontrada.");
 
-    // NOVO: não gera novo checkout para inscrição já paga (evita cobrança duplicada)
+    // Escritas com service role: o usuário não pode mais alterar payment_id/status/price
+    const db = createClient(PROJECT_URL(), SERVICE_ROLE_KEY());
+
+    // Não gera novo checkout para inscrição já paga (evita cobrança duplicada)
     if (registration.status === "confirmed") {
       throw new Error("Esta inscrição já está paga e confirmada. Nenhum novo pagamento é necessário.");
     }
-
-    let amount = Number(registration.price ?? 0);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      const raceRow = await db
-        .from("races")
-        .select("kits, distances")
-        .eq("id", registration.race_id)
-        .maybeSingle();
-      const kits = raceRow.data?.kits ?? [];
-      const distances = raceRow.data?.distances ?? [];
-      const kit =
-        kits.find((k: any) => k.id === registration.kit_id) ||
-        kits.find((k: any) => k.name === registration.kit_name);
-      const dist = distances.find((d: any) => Number(d.km) === Number(registration.distance));
-      amount = Number(kit?.price ?? dist?.price ?? 0);
+    if (registration.status === "cancelled") {
+      throw new Error("Esta inscrição foi cancelada. Faça uma nova inscrição.");
     }
+
+    // Preço SEMPRE recalculado no servidor (kit/distância + desconto do evento);
+    // nunca confia no valor enviado pelo navegador.
+    const { data: serverPrice, error: priceErr } = await db.rpc("compute_registration_price", {
+      p_race_id: registration.race_id,
+      p_kit_id: registration.kit_id,
+      p_kit_name: registration.kit_name,
+      p_distance: registration.distance,
+      p_distance_id: registration.distance_id,
+    });
+    if (priceErr) throw new Error(`Falha ao calcular o valor da inscrição: ${priceErr.message}`);
+    let amount = Number(serverPrice ?? 0);
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("O kit desta inscrição está sem preço válido. Peça ao organizador para preencher o preço do kit.");
     }
     amount = Math.round(amount * 100) / 100;
+    if (Math.abs(amount - Number(registration.price)) > 0.01) {
+      await db.from("registrations").update({ price: amount }).eq("id", registrationId);
+    }
 
     const appUrl =
       Deno.env.get("APP_URL") ||
