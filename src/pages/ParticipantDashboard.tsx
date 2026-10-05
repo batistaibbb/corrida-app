@@ -126,7 +126,7 @@ export default function ParticipantDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><p className="text-xs text-gray-500">Nome</p><p className="font-medium">{user.name}</p></div>
             <div><p className="text-xs text-gray-500">E-mail</p><p className="font-medium">{user.email}</p></div>
-            <div><p className="text-xs text-gray-500">CPF</p><p className="font-medium">{user.cpf}</p></div>
+            <div><p className="text-xs text-gray-500">CPF</p><p className="font-medium">{user.cpf || 'Não informado'}</p></div>
             <div><p className="text-xs text-gray-500">Telefone</p><p className="font-medium">{user.phone}</p></div>
           </div>
         </div>

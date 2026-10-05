@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Save, Image as ImageIcon, FileText, Eye, Plus, GripVertical, Trash2 } from 'lucide-react';
+import { X, Save, Image as ImageIcon, FileText, Eye, Plus, GripVertical, Trash2, MessageCircle } from 'lucide-react';
 import ImageUpload from './ImageUpload';
 import PdfUpload from './PdfUpload';
 import EventPreview from './EventPreview';
@@ -30,6 +30,8 @@ export default function EventForm({ race, onSave, onClose, organizerId, organize
     // Auditoria UX P6: infos de retirada do kit (exibidas no comprovante/QR do participante)
     kitPickup: race?.kitPickup || '',
     kitPickupLocation: race?.kitPickupLocation || '',
+    // WhatsApp do organizador (botão de contato na página pública do evento)
+    organizerWhatsapp: race?.organizerWhatsapp || '',
     image: race?.image || '',
     description: race?.description || '',
     // Ao editar, mantém o organizador do evento; só usa o nome do usuário logado em eventos novos
@@ -103,12 +105,24 @@ export default function EventForm({ race, onSave, onClose, organizerId, organize
     setFormData({ ...formData, kits: formData.kits.filter((_, i) => i !== index) });
   };
 
+  // Máscara progressiva de telefone/WhatsApp enquanto digita.
+  const maskPhoneField = (v: string) => {
+    const d = v.replace(/\D/g, '').slice(0, 13);
+    if (d.length <= 2) return d.length ? `(${d}` : '';
+    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    if (d.length <= 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    return `+${d.slice(0, 2)} (${d.slice(2, 4)}) ${d.slice(4, 8)}-${d.slice(8)}`;
+  };
+
   const handleSubmit = () => {
     onSave({
       ...formData,
       includes: formData.includes.filter(i => i.trim()),
       rules: formData.rules.filter(r => r.trim()),
       tags: formData.tags.filter(t => t.trim()),
+      // Persiste somente dígitos (padrão usado para montar o link wa.me)
+      organizerWhatsapp: formData.organizerWhatsapp.replace(/\D/g, ''),
     });
   };
 
@@ -423,6 +437,29 @@ export default function EventForm({ race, onSave, onClose, organizerId, organize
                     </div>
                     <p className="md:col-span-2 text-xs text-slate-500 -mt-2">
                       Opcional, mas recomendado: estas informações aparecem no comprovante e no QR Code do participante. Se preenchidas, o comprovante deixa de mostrar "consulte o e-mail do organizador".
+                    </p>
+                  </div>
+
+                  {/* WhatsApp do organizador — habilita o botão "Falar no WhatsApp" na página do evento */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-200">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-2">
+                        WhatsApp do Organizador <span className="text-slate-400 font-normal">(opcional)</span>
+                      </label>
+                      <div className="relative">
+                        <MessageCircle className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          value={formData.organizerWhatsapp}
+                          onChange={(e) => setFormData({ ...formData, organizerWhatsapp: maskPhoneField(e.target.value) })}
+                          placeholder="(11) 99999-9999"
+                          className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+                    <p className="md:col-span-2 text-xs text-slate-500 -mt-2">
+                      Opcional: quando preenchido, a página pública do evento exibe um botão &quot;Falar no WhatsApp&quot; que abre uma conversa direta com o organizador. Assuma DDI 55 (Brasil) quando o número começar com DDD.
                     </p>
                   </div>
                 </div>

@@ -12,6 +12,7 @@ import { confirmAction } from '../utils/confirm';
 import { setEventShareMeta, resetShareMeta } from '../utils/shareMeta';
 import { toSafeNumber, getLowestPrice, discounted, formatBRL } from '../utils/pricing';
 import { safeRedirectTarget } from '../components/ProtectedRoute';
+import { isValidCpf, isOptionalCpfValid, maskCpf, maskPhone, maskZip, whatsappLink } from '../utils/documents';
 import { ArrowLeft } from 'lucide-react';
 
 export default function RegistrationPage() {
@@ -62,19 +63,7 @@ export default function RegistrationPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, race?.id, registrations]);
 
-  // Auditoria UX P7: mascaras progressivas enquanto digita.
-  const maskCpf = (v: string) => v.replace(/\D/g, '').slice(0, 11)
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
-  const maskPhone = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 11);
-    if (d.length <= 2) return d.length ? `(${d}` : '';
-    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
-  };
-  const maskZip = (v: string) => v.replace(/\D/g, '').slice(0, 8).replace(/(\d{5})(\d)/, '$1-$2');
+  // Auditoria UX P7: mascaras progressivas compartilhadas (utils/documents).
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -90,19 +79,6 @@ export default function RegistrationPage() {
     return race.kits?.find(k => k.id === selectedKit);
   };
 
-  // Auditoria UX P3: validacao real de CPF (digitos verificadores).
-  const isValidCpf = (raw: string) => {
-    const cpf = raw.replace(/\D/g, '');
-    if (cpf.length !== 11 || /^([0-9])\1{10}$/.test(cpf)) return false;
-    let sum = 0;
-    for (let i = 0; i < 9; i++) sum += parseInt(cpf[i]) * (11 - i);
-    let d1 = (sum * 10) % 11; if (d1 === 10) d1 = 0;
-    if (d1 !== parseInt(cpf[9])) return false;
-    sum = 0;
-    for (let i = 0; i < 10; i++) sum += parseInt(cpf[i]) * (10 - i);
-    let d2 = (sum * 10) % 11; if (d2 === 10) d2 = 0;
-    return d2 === parseInt(cpf[10]);
-  };
 
   // Menor de idade: exige responsavel legal (nome + CPF valido do responsavel).
   const parseResponsibleCpf = (raw: string) => {
@@ -135,8 +111,10 @@ export default function RegistrationPage() {
       showToast('O preço do kit selecionado é inválido. Edite o evento no painel admin e defina um preço (número maior que zero).', 'error', 6000);
       return;
     }
-    // P3: bloquear envio com dados invalidos ANTES de criar a inscricao pendente
-    if (!isValidCpf(formData.cpf)) { showToast('CPF inválido. Verifique os números informados.', 'error'); return; }
+    // P3: bloquear envio com dados invalidos ANTES de criar a inscricao pendente.
+    // CPF passou a ser OPCIONAL aqui tambem (dado sensivel — evita abandono da
+    // inscricao). Se preenchido, precisa ser um CPF valido.
+    if (!isOptionalCpfValid(formData.cpf)) { showToast('CPF inválido. Verifique os números informados ou deixe o campo vazio.', 'error'); return; }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email)) { showToast('E-mail inválido.', 'error'); return; }
     if (formData.phone.replace(/\D/g, '').length < 10) { showToast('Telefone incompleto — inclua DDD.', 'error'); return; }
     if (formData.birthDate && new Date(formData.birthDate) > new Date()) { showToast('Data de nascimento não pode ser no futuro.', 'error'); return; }
@@ -258,16 +236,40 @@ export default function RegistrationPage() {
 
             {step === 2 && (
               <div className="space-y-4">
-                <h2 className="text-lg font-bold">Dados Pessoais</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="Nome" className="px-4 py-2.5 border rounded-lg" required />
-                  <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Sobrenome" className="px-4 py-2.5 border rounded-lg" required />
+                <div>
+                  <h2 className="text-lg font-bold">Dados Pessoais</h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Campos com <span className="text-rose-600 font-semibold">*</span> são obrigatórios. Os demais são opcionais.
+                  </p>
                 </div>
-                <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="E-mail" className="w-full px-4 py-2.5 border rounded-lg" required />
-                <input type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="Telefone" className="w-full px-4 py-2.5 border rounded-lg" required />
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="text" name="cpf" value={formData.cpf} onChange={handleChange} placeholder="CPF *" className="px-4 py-2.5 border rounded-lg" required />
-                  <input type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} className="px-4 py-2.5 border rounded-lg" required />
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Nome <span className="text-rose-600">*</span></label>
+                    <input type="text" name="firstName" autoComplete="given-name" value={formData.firstName} onChange={handleChange} placeholder="Seu nome" className="w-full px-4 py-2.5 border rounded-lg" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Sobrenome <span className="text-slate-400 font-normal">(opcional)</span></label>
+                    <input type="text" name="lastName" autoComplete="family-name" value={formData.lastName} onChange={handleChange} placeholder="Seu sobrenome" className="w-full px-4 py-2.5 border rounded-lg" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">E-mail <span className="text-rose-600">*</span></label>
+                  <input type="email" name="email" autoComplete="email" value={formData.email} onChange={handleChange} placeholder="seu@email.com" className="w-full px-4 py-2.5 border rounded-lg" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Telefone <span className="text-rose-600">*</span></label>
+                  <input type="tel" name="phone" inputMode="tel" autoComplete="tel" value={formData.phone} onChange={handleChange} placeholder="(11) 99999-9999" className="w-full px-4 py-2.5 border rounded-lg" required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* CPF opcional: dado sensível — quem preferir pode deixar em branco */}
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">CPF <span className="text-slate-400 font-normal">(opcional)</span></label>
+                    <input type="text" name="cpf" inputMode="numeric" autoComplete="off" value={formData.cpf} onChange={handleChange} placeholder="000.000.000-00" className="w-full px-4 py-2.5 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Data de nascimento <span className="text-rose-600">*</span></label>
+                    <input type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg" required />
+                  </div>
                 </div>
                 {/* Auditoria UX P1/menores: data de nascimento obrigatoria para identificar menor de 18 */}
                 {!formData.birthDate && (
@@ -281,22 +283,24 @@ export default function RegistrationPage() {
                     <input type="text" name="responsibleCpf" value={formData.responsibleCpf} onChange={handleChange} placeholder="CPF do responsável * " className="w-full px-4 py-2.5 border rounded-lg bg-white" inputMode="numeric" />
                   </div>
                 )}
-                <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg" required>
-                  <option value="">Gênero</option>
-                  <option value="masculino">Masculino</option>
-                  <option value="feminino">Feminino</option>
-                </select>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Sexo <span className="text-slate-400 font-normal">(opcional)</span></label>
+                  <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg bg-white">
+                    <option value="">Selecione (opcional)</option>
+                    <option value="masculino">Masculino</option>
+                    <option value="feminino">Feminino</option>
+                    <option value="outro">Outro / prefiro não informar</option>
+                  </select>
+                </div>
                 <div className="flex gap-3">
                   <button onClick={() => setStep(1)} className="px-6 py-3 border rounded-xl">Voltar</button>
-                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email) || formData.cpf.replace(/\D/g, '').length !== 11 || !formData.birthDate || (isMinor && (!formData.responsibleName.trim() || !formData.responsibleCpf.replace(/\D/g, '')))} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
+                  <button onClick={() => setStep(3)} disabled={!formData.firstName || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(formData.email) || formData.phone.replace(/\D/g, '').length < 10 || !formData.birthDate || !isOptionalCpfValid(formData.cpf) || (isMinor && (!formData.responsibleName.trim() || !formData.responsibleCpf.replace(/\D/g, '')))} className="flex-1 py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl disabled:opacity-50">Próximo</button>
                 </div>
               </div>
             )}
 
             {step === 3 && (
               <div className="space-y-4">
-                <h2 className="text-lg font-bold">Tamanho e Endereço</h2>
-                
                 {/* Tamanho da Camisa - apenas se o kit incluir camisa */}
                 {getSelectedKit()?.includes.some(item => item.toLowerCase().includes('camisa')) && (
                   <div>
@@ -320,11 +324,29 @@ export default function RegistrationPage() {
                   </div>
                 )}
 
-                <input type="text" name="address" value={formData.address} onChange={handleChange} placeholder="Endereço" className="w-full px-4 py-2.5 border rounded-lg" required />
+                <div>
+                  <h2 className="text-lg font-bold">Tamanho e Endereço</h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Campos com <span className="text-rose-600 font-semibold">*</span> são obrigatórios. Os demais são opcionais.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Endereço <span className="text-rose-600">*</span></label>
+                  <input type="text" name="address" autoComplete="street-address" value={formData.address} onChange={handleChange} placeholder="Rua, número, complemento" className="w-full px-4 py-2.5 border rounded-lg" required />
+                </div>
                 <div className="grid grid-cols-3 gap-4">
-                  <input type="text" name="city" value={formData.city} onChange={handleChange} placeholder="Cidade" className="px-4 py-2.5 border rounded-lg" required />
-                  <input type="text" name="state" value={formData.state} onChange={handleChange} placeholder="UF" maxLength={2} className="px-4 py-2.5 border rounded-lg" required />
-                  <input type="text" name="zipCode" value={formData.zipCode} onChange={handleChange} placeholder="CEP" className="px-4 py-2.5 border rounded-lg" required />
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Cidade <span className="text-slate-400 font-normal">(opcional)</span></label>
+                    <input type="text" name="city" autoComplete="address-level2" value={formData.city} onChange={handleChange} placeholder="Cidade" className="w-full px-4 py-2.5 border rounded-lg" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">UF <span className="text-slate-400 font-normal">(opcional)</span></label>
+                    <input type="text" name="state" value={formData.state} onChange={handleChange} placeholder="SP" maxLength={2} className="w-full px-4 py-2.5 border rounded-lg uppercase" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">CEP <span className="text-slate-400 font-normal">(opcional)</span></label>
+                    <input type="text" name="zipCode" inputMode="numeric" autoComplete="postal-code" value={formData.zipCode} onChange={handleChange} placeholder="00000-000" className="w-full px-4 py-2.5 border rounded-lg" />
+                  </div>
                 </div>
                 <div className="flex gap-3">
                   <button onClick={() => setStep(2)} className="px-6 py-3 border rounded-xl">Voltar</button>
@@ -344,10 +366,21 @@ export default function RegistrationPage() {
 
             {step === 4 && (
               <div className="space-y-4">
-                <h2 className="text-lg font-bold">Emergência e Termos</h2>
+                <div>
+                  <h2 className="text-lg font-bold">Emergência e Termos</h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Campos com <span className="text-rose-600 font-semibold">*</span> são obrigatórios. Os demais são opcionais.
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <input type="text" name="emergencyName" value={formData.emergencyName} onChange={handleChange} placeholder="Contato de emergência" className="px-4 py-2.5 border rounded-lg" required />
-                  <input type="tel" name="emergencyPhone" value={formData.emergencyPhone} onChange={handleChange} placeholder="Telefone emergência" className="px-4 py-2.5 border rounded-lg" required />
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Contato de emergência <span className="text-rose-600">*</span></label>
+                    <input type="text" name="emergencyName" value={formData.emergencyName} onChange={handleChange} placeholder="Nome completo" className="w-full px-4 py-2.5 border rounded-lg" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">Telefone emergência <span className="text-slate-400 font-normal">(opcional)</span></label>
+                    <input type="tel" name="emergencyPhone" inputMode="tel" value={formData.emergencyPhone} onChange={handleChange} placeholder="(11) 99999-9999" className="w-full px-4 py-2.5 border rounded-lg" />
+                  </div>
                 </div>
                 <label className="flex items-start gap-2"><input type="checkbox" name="acceptTerms" checked={formData.acceptTerms} onChange={handleChange} className="mt-1" /><span className="text-sm">Li e aceito os termos de uso *</span></label>
                 <label className="flex items-start gap-2"><input type="checkbox" name="acceptMedical" checked={formData.acceptMedical} onChange={handleChange} className="mt-1" /><span className="text-sm">Declaro que possuo atestado médico *</span></label>
@@ -361,6 +394,22 @@ export default function RegistrationPage() {
 
           <div className="bg-white rounded-xl p-6 shadow-sm h-fit sticky top-20">
             <h3 className="font-bold mb-4">Resumo</h3>
+            {(() => {
+              const wa = whatsappLink(race.organizerWhatsapp, `Olá! Tenho uma dúvida sobre a inscrição no evento ${race.name}.`);
+              return wa ? (
+                <a
+                  href={wa}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mb-4 flex items-center justify-center gap-2 w-full py-2.5 bg-[#25D366] text-white text-sm font-semibold rounded-lg hover:brightness-95 transition-all"
+                >
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" aria-hidden="true">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                  </svg>
+                  Falar com o organizador
+                </a>
+              ) : null;
+            })()}
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">Evento</span><span className="font-medium">{race.name}</span></div>
               {selectedKit && getSelectedKit() && (

@@ -202,7 +202,7 @@ export default function ReceiptPage() {
     // G7: dados do PARTICIPANTE da inscrição (não da conta de login — pode ser pai/mãe inscrevendo filho)
     const partName = [registration.participantFirstName, registration.participantLastName].filter(Boolean).join(' ') || user.name;
     row('Nome', partName);
-    row('CPF', registration.participantCpf || user.cpf);
+    row('CPF', registration.participantCpf || user.cpf || 'Não informado');
     if (registration.participantEmail) row('E-mail', registration.participantEmail);
     if (registration.participantPhone) row('Telefone', registration.participantPhone);
     y += 4;
@@ -287,7 +287,7 @@ export default function ReceiptPage() {
                 return (
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div><p className="text-slate-500">Nome</p><p className="font-medium text-slate-900">{partName}</p></div>
-                    <div><p className="text-slate-500">CPF</p><p className="font-medium text-slate-900">{registration.participantCpf || user.cpf}</p></div>
+                    <div><p className="text-slate-500">CPF</p><p className="font-medium text-slate-900">{registration.participantCpf || user.cpf || 'Não informado'}</p></div>
                     {(registration.participantEmail || registration.participantPhone) && (
                       <>
                         <div><p className="text-slate-500">E-mail</p><p className="font-medium text-slate-900 break-all">{registration.participantEmail || user.email}</p></div>
