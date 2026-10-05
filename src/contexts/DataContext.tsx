@@ -69,7 +69,8 @@ function convertRaceFromSupabase(race: any): Race {
     id: race.id,
     name: race.name,
     date: race.date,
-    time: race.time,
+    // Postgres devolve "07:00:00"; o app trabalha com "07:00"
+    time: typeof race.time === 'string' ? race.time.slice(0, 5) : race.time,
     location: race.location,
     city: race.city,
     state: race.state,
