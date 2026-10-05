@@ -282,6 +282,31 @@ export default function RaceDetailsPage() {
               </div>
             )}
 
+            {/* Mapa do percurso */}
+            {race.routeMap && (
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                <h2 className="text-2xl font-bold mb-4 text-slate-900">Mapa do Percurso</h2>
+                <a href={race.routeMap} target="_blank" rel="noopener noreferrer" title="Abrir em tamanho original">
+                  <img src={race.routeMap} alt={`Mapa do percurso - ${race.name}`} loading="lazy" className="w-full rounded-lg border border-slate-200" />
+                </a>
+              </div>
+            )}
+
+            {/* Regulamento */}
+            {race.regulationPdf && (
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+                <h2 className="text-2xl font-bold mb-4 text-slate-900">Regulamento</h2>
+                <a
+                  href={race.regulationPdf}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition-colors"
+                >
+                  Ver / baixar regulamento (PDF)
+                </a>
+              </div>
+            )}
+
             {/* Rules */}
             {race.rules && race.rules.length > 0 && (
               <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">

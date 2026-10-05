@@ -69,7 +69,8 @@ function convertRaceFromSupabase(race: any): Race {
     id: race.id,
     name: race.name,
     date: race.date,
-    time: race.time,
+    // Postgres devolve "07:00:00"; o app trabalha com "07:00"
+    time: typeof race.time === 'string' ? race.time.slice(0, 5) : race.time,
     location: race.location,
     city: race.city,
     state: race.state,
@@ -98,6 +99,9 @@ function convertRaceFromSupabase(race: any): Race {
     // Auditoria UX P6: retirada do kit (colunas novas via migration 003)
     kitPickup: race.kit_pickup ?? race.kitPickup ?? undefined,
     kitPickupLocation: race.kit_pickup_location ?? race.kitPickupLocation ?? undefined,
+    // Regulamento (PDF) e mapa do percurso — colunas regulation_pdf / route_map
+    regulationPdf: race.regulation_pdf ?? race.regulationPdf ?? undefined,
+    routeMap: race.route_map ?? race.routeMap ?? undefined,
     createdAt: race.created_at || race.createdAt,
   };
 }
@@ -348,6 +352,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         // Auditoria UX P6: retirada do kit (colunas kit_pickup / kit_pickup_location — migration 003)
         kit_pickup: race.kitPickup || null,
         kit_pickup_location: race.kitPickupLocation || null,
+        regulation_pdf: race.regulationPdf || null,
+        route_map: race.routeMap || null,
       };
       
       // Adicionar kits e tamanhos de camisa se disponíveis
@@ -385,6 +391,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       if (data.state !== undefined) updateData.state = data.state;
       if (data.image !== undefined) updateData.image_url = data.image;
       if (data.description !== undefined) updateData.description = data.description;
+      if (data.organizer !== undefined) updateData.organizer_name = data.organizer;
       if (data.maxParticipants !== undefined) updateData.max_participants = data.maxParticipants;
       if (data.category !== undefined) updateData.category = data.category;
       if (data.sport !== undefined) updateData.sport = data.sport;
@@ -401,6 +408,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
       // Auditoria UX P6: retirada do kit
       if (data.kitPickup !== undefined) updateData.kit_pickup = data.kitPickup || null;
       if (data.kitPickupLocation !== undefined) updateData.kit_pickup_location = data.kitPickupLocation || null;
+      if (data.regulationPdf !== undefined) updateData.regulation_pdf = data.regulationPdf || null;
+      if (data.routeMap !== undefined) updateData.route_map = data.routeMap || null;
       
       const { error } = await supabase
         .from('races')
