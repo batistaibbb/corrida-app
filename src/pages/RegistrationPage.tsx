@@ -167,6 +167,14 @@ export default function RegistrationPage() {
         participantEmail: formData.email,
         participantPhone: formData.phone,
         participantCpf: formData.cpf,
+        birthDate: formData.birthDate || undefined,
+        gender: formData.gender || undefined,
+        address: formData.address || undefined,
+        addressCity: formData.city || undefined,
+        addressState: formData.state || undefined,
+        zipCode: formData.zipCode || undefined,
+        termsAcceptedAt: formData.acceptTerms ? new Date().toISOString() : undefined,
+        medicalDeclarationAt: formData.acceptMedical ? new Date().toISOString() : undefined,
         // Menor de idade: responsavel legal coletado no checkout
         ...(isMinor ? {
           isMinor: true,

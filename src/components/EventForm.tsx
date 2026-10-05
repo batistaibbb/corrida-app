@@ -119,7 +119,7 @@ export default function EventForm({ race, onSave, onClose, organizerId, organize
       case 'details':
         return formData.description && formData.maxParticipants > 0;
       case 'distances':
-        return formData.distances.length > 0 && formData.distances.every(d => d.km > 0 && d.price > 0);
+        return formData.distances.length > 0 && formData.distances.every(d => d.km > 0 && (d.price > 0 || formData.kits.length > 0));
       case 'kits':
         return formData.kits.length === 0 || formData.kits.every(k => k.name && k.price > 0 && k.image);
       case 'publish':
