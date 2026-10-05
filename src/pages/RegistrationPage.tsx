@@ -12,7 +12,7 @@ import { confirmAction } from '../utils/confirm';
 import { setEventShareMeta, resetShareMeta } from '../utils/shareMeta';
 import { toSafeNumber, getLowestPrice, discounted, formatBRL } from '../utils/pricing';
 import { safeRedirectTarget } from '../components/ProtectedRoute';
-import { maskCpf, maskPhone, maskZip, whatsappLink } from '../utils/documents';
+import { maskCpf, maskPhone, maskZip, whatsappLink, normalizeGender } from '../utils/documents';
 import { ArrowLeft } from 'lucide-react';
 
 export default function RegistrationPage() {
@@ -145,7 +145,7 @@ export default function RegistrationPage() {
         participantPhone: formData.phone,
         participantCpf: '',
         birthDate: formData.birthDate || undefined,
-        gender: formData.gender || undefined,
+        gender: normalizeGender(formData.gender) || undefined,
         address: formData.address || undefined,
         addressCity: formData.city || undefined,
         addressState: formData.state || undefined,
@@ -276,12 +276,12 @@ export default function RegistrationPage() {
                   </div>
                 )}
                 <div>
+                  {/* Opções padronizadas: apenas Masculino ou Feminino (exigência do organizador). */}
                   <label className="block text-sm font-medium text-slate-700 mb-1">Sexo <span className="text-slate-400 font-normal">(opcional)</span></label>
                   <select name="gender" value={formData.gender} onChange={handleChange} className="w-full px-4 py-2.5 border rounded-lg bg-white">
                     <option value="">Selecione (opcional)</option>
                     <option value="masculino">Masculino</option>
                     <option value="feminino">Feminino</option>
-                    <option value="outro">Outro / prefiro não informar</option>
                   </select>
                 </div>
                 <div className="flex gap-3">

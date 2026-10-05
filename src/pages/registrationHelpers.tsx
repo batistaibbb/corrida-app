@@ -7,6 +7,7 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Trophy, X, CheckCircle, Copy, Check, Download, AlertCircle } from 'lucide-react';
 import { toSafeNumber, formatBRL } from '../utils/pricing';
+import { getGenderLabel } from '../utils/documents';
 import { formatEventDate } from '../utils/raceStatus';
 import { showToast } from '../utils/toast';
 
@@ -91,7 +92,7 @@ export function exportToExcel(registrations: Registration[], races: Race[]) {
       'E-mail': getParticipantEmail(reg),
       'CPF': getParticipantCpf(reg),
       'Data de Nascimento': reg.birthDate ? format(parseISO(reg.birthDate), 'dd/MM/yyyy') : '',
-      'Sexo': reg.gender || '',
+      'Sexo': getGenderLabel(reg.gender),
       'Endereço': [reg.address, reg.addressCity, reg.addressState, reg.zipCode].filter(Boolean).join(' - '),
       'Evento': race?.name || 'N/A',
       'Kit Escolhido': getKitLabel(reg),
@@ -178,7 +179,7 @@ export default function RegistrationDetailsModal({ registration, race, onClose }
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">Sexo</p>
-                  <p className="font-semibold text-slate-900">{registration.gender || '-'}</p>
+                  <p className="font-semibold text-slate-900">{getGenderLabel(registration.gender)}</p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-xs text-slate-500">Endereço</p>

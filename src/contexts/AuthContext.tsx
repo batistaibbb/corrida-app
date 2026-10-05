@@ -23,6 +23,8 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
   register: (data: Omit<User, 'id' | 'createdAt'>) => Promise<{ success: boolean; message: string }>;
   logout: () => Promise<void>;
+  // Edição dos dados cadastrais pelo próprio usuário (Nome / Telefone).
+  updateProfile: (data: { name: string; phone: string }) => Promise<{ success: boolean; message: string }>;
   isAdmin: boolean;
   isParticipant: boolean;
 }
@@ -306,6 +308,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true, message: 'Conta criada com sucesso!' };
   };
 
+  /**
+   * Atualiza os dados cadastrais do usuário logado (nome e telefone).
+   * - Supabase: grava em profiles (RLS "own row") + user_metadata no Auth.
+   * - Demo: atualiza o array rb_users e a sessão salva no localStorage.
+   */
+  const updateProfile = async (data: { name: string; phone: string }) => {
+    if (!user) return { success: false, message: 'Usuário não autenticado.' };
+
+    if (!isDemoMode && supabase) {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ name: data.name, phone: data.phone })
+          .eq('id', user.id);
+
+        if (error) {
+          console.error('Erro ao atualizar perfil:', error);
+          return { success: false, message: 'Não foi possível salvar seus dados. Tente novamente.' };
+        }
+
+        // Mantém o metadata do Auth sincronizado (best-effort — não bloqueia o salvamento).
+        try {
+          await supabase.auth.updateUser({ data: { name: data.name } });
+        } catch { /* opcional */ }
+
+        setUser({ ...user, name: data.name, phone: data.phone });
+        return { success: true, message: 'Dados atualizados com sucesso!' };
+      } catch (err) {
+        console.error('Erro em updateProfile:', err);
+        return { success: false, message: 'Erro ao salvar. Verifique sua conexão.' };
+      }
+    }
+
+    const users = getUsers();
+    const updated = users.map(u =>
+      u.id === user.id ? { ...u, name: data.name, phone: data.phone } : u
+    );
+    saveUsers(updated);
+    const newUser = { ...user, name: data.name, phone: data.phone };
+    setUser(newUser);
+    localStorage.setItem('rb_session', JSON.stringify(newUser));
+    return { success: true, message: 'Dados atualizados com sucesso!' };
+  };
+
   const logout = async () => {
     if (!isDemoMode && supabase) {
       try {
@@ -337,6 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         login,
         register,
         logout,
+        updateProfile,
         isAdmin: user?.role === 'admin',
         isParticipant: user?.role === 'participant',
       }}
