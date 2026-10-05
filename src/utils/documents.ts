@@ -16,6 +16,25 @@ export function maskCpf(value: string): string {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 }
 
+/**
+ * Padroniza o sexo para as duas opções aceitas pelo sistema (exigência do
+ * organizador): apenas "masculino" ou "feminino". Qualquer outro valor
+ * (inclusive legados como "outro") volta a ficar em branco.
+ */
+export function normalizeGender(value: string | undefined | null): '' | 'masculino' | 'feminino' {
+  const v = (value || '').toString().trim().toLowerCase();
+  if (v === 'masculino' || v === 'm') return 'masculino';
+  if (v === 'feminino' || v === 'f') return 'feminino';
+  return '';
+}
+
+/** Rótulo padronizado ("Masculino"/"Feminino"); '-' quando não informado. */
+export function getGenderLabel(value: string | undefined | null): string {
+  const g = normalizeGender(value);
+  if (!g) return '-';
+  return g === 'masculino' ? 'Masculino' : 'Feminino';
+}
+
 export function maskPhone(value: string): string {
   const d = value.replace(/\D/g, '').slice(0, 11);
   if (d.length <= 2) return d.length ? `(${d}` : '';
