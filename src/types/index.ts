@@ -51,6 +51,9 @@ export interface Race {
   // Auditoria UX G7: informações de retirada do kit exibidas no comprovante
   kitPickup?: string;
   kitPickupLocation?: string;
+  // WhatsApp do organizador (cadastrado pelo admin no formulário do evento) —
+  // quando presente, exibe o botão "Falar no WhatsApp" na página do evento.
+  organizerWhatsapp?: string;
 }
 
 export interface RaceDistance {

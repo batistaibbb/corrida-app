@@ -13,6 +13,7 @@ import { setEventShareMeta, resetShareMeta } from '../utils/shareMeta';
 import { toSafeNumber, getLowestPrice, discounted, formatBRL } from '../utils/pricing';
 import { safeRedirectTarget } from '../components/ProtectedRoute';
 import { Eye, EyeOff, Trophy } from 'lucide-react';
+import { maskCpf, maskPhone, isOptionalCpfValid } from '../utils/documents';
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -52,7 +53,18 @@ export default function LoginPage() {
         setError(result.message);
       }
     } else {
-      const result = await register({ ...formData, role: 'participant' });
+      // CPF agora é OPCIONAL no cadastro (dado sensível — evita abandono da conta).
+      // Se preenchido, ainda precisa ser um CPF válido. Normaliza com máscara.
+      if (!isOptionalCpfValid(formData.cpf)) {
+        setError('CPF inválido. Verifique os números informados ou deixe o campo vazio.');
+        return;
+      }
+      const result = await register({
+        ...formData,
+        cpf: formData.cpf ? maskCpf(formData.cpf) : '',
+        phone: formData.phone ? maskPhone(formData.phone) : '',
+        role: 'participant',
+      });
       if (result.success) navigate(isSafeRedirect ? fromParam! : '/minha-conta', { replace: isSafeRedirect });
       else setError(result.message);
     }
@@ -66,23 +78,50 @@ export default function LoginPage() {
             <Trophy className="w-8 h-8 text-white" />
           </div>
           <h2 className="text-2xl font-bold text-slate-900">{isLogin ? 'Entrar' : 'Criar Conta'}</h2>
+          {!isLogin && (
+            <p className="text-xs text-slate-500 mt-2">
+              Campos marcados com <span className="text-rose-600 font-semibold">*</span> são obrigatórios.
+              Os demais são opcionais.
+            </p>
+          )}
         </div>
 
         {error && <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-sm text-rose-700">{error}</div>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!isLogin && <input type="text" placeholder="Nome completo" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />}
-          <input type="email" placeholder="E-mail" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
-          <div className="relative">
-            <input type={showPassword ? 'text' : 'password'} placeholder="Senha" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
-              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-            </button>
+          {!isLogin && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Nome completo <span className="text-rose-600">*</span></label>
+              <input type="text" autoComplete="name" placeholder="Nome completo" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">E-mail <span className="text-rose-600">*</span></label>
+            <input type="email" autoComplete="email" placeholder="seu@email.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value.trim()})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Senha <span className="text-rose-600">*</span></label>
+            <div className="relative">
+              <input type={showPassword ? 'text' : 'password'} autoComplete={isLogin ? 'current-password' : 'new-password'} placeholder="Mínimo 6 caracteres" value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required minLength={isLogin ? undefined : 6} />
+              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}>
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
           {!isLogin && (
             <>
-              <input type="text" placeholder="CPF" value={formData.cpf} onChange={(e) => setFormData({...formData, cpf: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
-              <input type="tel" placeholder="Telefone" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
+              {/* CPF opcional no cadastro: dado sensível — quem preferir só informa na inscrição */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  CPF <span className="text-slate-400 font-normal">(opcional)</span>
+                </label>
+                <input type="text" inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" value={formData.cpf} onChange={(e) => setFormData({...formData, cpf: maskCpf(e.target.value)})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" />
+                <p className="text-xs text-slate-400 mt-1">Não é obrigatório criar a conta. Você poderá informar depois, se preferir.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Telefone <span className="text-rose-600">*</span></label>
+                <input type="tel" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-9999" value={formData.phone} onChange={(e) => setFormData({...formData, phone: maskPhone(e.target.value)})} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" required />
+              </div>
             </>
           )}
           <button type="submit" className="w-full py-3 bg-gradient-to-r from-emerald-600 to-sky-600 text-white font-bold rounded-xl hover:from-emerald-700 hover:to-sky-700 transition-all">{isLogin ? 'Entrar' : 'Criar Conta'}</button>
